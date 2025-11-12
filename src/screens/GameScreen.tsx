@@ -1,5 +1,15 @@
-import React, { useState } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet, Alert } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  ActivityIndicator,
+  StyleSheet,
+  Alert,
+  FlatList,
+  Animated,
+  Easing,
+  Image,
+} from 'react-native';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import LinearGradient from 'react-native-linear-gradient';
@@ -18,9 +28,33 @@ const GameScreen: React.FC = () => {
   const [round, setRound] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Keep same Animated.Value reference across renders
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.2,
+          duration: 1200,
+          easing: Easing.ease,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1200,
+          easing: Easing.ease,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [pulseAnim]);
+
   const startRound = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
       const response = await fetch(
         `https://spyback.onrender.com/api/game/${session.id}/round`,
         { method: 'POST' }
@@ -44,84 +78,134 @@ const GameScreen: React.FC = () => {
   };
 
   return (
-    <LinearGradient colors={['#0f2027', '#203a43', '#2c5364']} style={styles.gradient}>
-      <GameContainer>
-        <Text style={styles.title}>🎮 Game Session</Text>
-        <Text style={styles.sessionInfo}>Session ID: {session.id}</Text>
+    <LinearGradient colors={['#000000', '#041016', '#050A0C']} style={styles.gradient}>
+      <View style={styles.overlay} />
 
-        <Text style={styles.subtitle}>👥 Players</Text>
-        {session.players.map((p: any) => (
-          <Text key={p.id} style={styles.playerName}>
-            {p.name}
-          </Text>
-        ))}
+      <Text style={styles.header}>SPY GAME</Text>
+      <Text style={styles.timer}>MISSION ACTIVE</Text>
+
+      <Animated.View style={[styles.fingerprintContainer, { transform: [{ scale: pulseAnim }] }]}>
+        <Image
+          source={require('../assets/fingerprint.png')}
+          style={styles.fingerprint}
+          resizeMode="contain"
+        />
+      </Animated.View>
+
+      <Text style={styles.signalText}>SIGNAL VERIFIED</Text>
+
+      <GameContainer>
+        
+
+        <Text style={styles.subtitle}>ACTIVE AGENTS</Text>
+       <FlatList
+  data={session.players}
+  keyExtractor={(p) => p.id.toString()}
+  renderItem={({ item }) => (
+    <View style={styles.playerRow}>
+      <Image
+        source={require('../assets/spyicon.png')}
+        style={styles.spyicon}
+        resizeMode="contain"
+      />
+      <Text style={styles.playerName}>{item.name}</Text>
+    </View>
+  )}
+/>
 
         <View style={{ marginTop: 30 }}>
           <NeonButton
-            title={loading ? 'Starting...' : '🚀 Start Round'}
+            title={loading ? 'Deploying...' : ' Initiate Round'}
             onPress={startRound}
           />
           {loading && <ActivityIndicator size="large" color="#00FFFF" style={{ marginTop: 15 }} />}
         </View>
 
-        {round && (
-          <View style={styles.roundContainer}>
-            <Text style={styles.roundText}>Round #{round.roundNumber}</Text>
-            <Text style={styles.questionText}>Question: {round.question.text}</Text>
-            <Text style={styles.spyText}>Spy: {round.spy.name}</Text>
-          </View>
-        )}
       </GameContainer>
     </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
+    spyicon: {
+    width: 24,
+    height: 24,
+    tintColor: '#00FFF0',
+    opacity: 0.8,
+  },
+    playerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   gradient: {
     flex: 1,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  title: {
-    color: '#00FFFF',
-    fontSize: 32,
-    fontWeight: 'bold',
-    textAlign: 'center',
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,255,255,0.02)',
+  },
+  header: {
+    color: '#C7D0D9',
+    fontSize: 42,
+    fontWeight: '700',
+    letterSpacing: 3,
+    marginTop: 40,
+  },
+  timer: {
+    color: '#FF4040',
+    fontSize: 16,
+    letterSpacing: 2,
+    marginBottom: 15,
+  },
+  fingerprintContainer: {
+    width: 180,
+    height: 180,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 10,
-    textShadowColor: '#00FFFF',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 12,
+  },
+  fingerprint: {
+    width: '100%',
+    height: '100%',
+    tintColor: '#00FFF0',
+    opacity: 0.8,
+  },
+  signalText: {
+    color: '#00FFF0',
+    fontSize: 18,
+    letterSpacing: 2,
+    marginBottom: 10,
   },
   sessionInfo: {
-    color: '#ccc',
-    fontSize: 16,
+    color: '#C7D0D9',
+    fontSize: 14,
     textAlign: 'center',
-    marginBottom: 15,
+    marginBottom: 10,
   },
   subtitle: {
     color: '#00FFFF',
     fontSize: 20,
-    marginTop: 10,
-    marginBottom: 10,
     fontWeight: '600',
     textAlign: 'center',
+    marginVertical: 10,
   },
   playerName: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 4,
   },
   roundContainer: {
     marginTop: 40,
-    backgroundColor: '#111',
+    backgroundColor: 'rgba(0, 255, 255, 0.05)',
     borderColor: '#00FFFF',
     borderWidth: 1,
     borderRadius: 12,
     padding: 20,
     width: '100%',
-    shadowColor: '#00FFFF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.9,
-    shadowRadius: 10,
   },
   roundText: {
     color: '#00FFFF',
@@ -130,13 +214,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   questionText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 18,
     marginTop: 10,
     textAlign: 'center',
   },
   spyText: {
-    color: '#ff4d4d',
+    color: '#FF4D4D',
     fontSize: 18,
     marginTop: 10,
     textAlign: 'center',

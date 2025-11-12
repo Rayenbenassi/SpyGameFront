@@ -1,8 +1,18 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, FlatList, Alert, StyleSheet } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  FlatList,
+  Alert,
+  StyleSheet,
+  Animated,
+  Easing,
+  Image,
+} from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import LinearGradient from 'react-native-linear-gradient';
 import { RootStackParamList } from '../navigation/types';
 import NeonButton from '../components/NeonButton';
 import GameContainer from '../components/GameContainer';
@@ -15,6 +25,27 @@ type CreateSessionScreenNavigationProp = StackNavigationProp<
 const CreateSessionScreen = () => {
   const navigation = useNavigation<CreateSessionScreenNavigationProp>();
   const [players, setPlayers] = useState<string[]>(['']);
+
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.2,
+          duration: 1200,
+          easing: Easing.ease,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1200,
+          easing: Easing.ease,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, [pulseAnim]);
 
   const addPlayer = () => setPlayers([...players, '']);
 
@@ -48,33 +79,44 @@ const CreateSessionScreen = () => {
   };
 
   return (
-    <LinearGradient
-      colors={['#0f2027', '#203a43', '#2c5364']}
-      style={styles.gradient}
-    >
-      <GameContainer>
-        <Text style={styles.title}>🕵️ Create a New Game</Text>
+    <LinearGradient colors={['#000000', '#041016', '#050A0C']} style={styles.gradient}>
+      <View style={styles.overlay} />
 
+      <Text style={styles.header}>SPY GAME</Text>
+
+      <View style={styles.centerContent}>
+        <Text style={styles.subTitle}>SIGNAL MATCH</Text>
+        <Animated.View style={[styles.fingerprintContainer, { transform: [{ scale: pulseAnim }] }]}>
+          <Image
+            source={require('../assets/fingerprint.png')}
+            style={styles.fingerprint}
+            resizeMode="contain"
+          />
+        </Animated.View>
+        <Text style={styles.footerText}>CLONE TARGET</Text>
+      </View>
+
+      <View style={styles.formContainer}>
         <FlatList
           data={players}
           keyExtractor={(_, index) => index.toString()}
-          renderItem={({ item, index }: { item: string; index: number }) => (
+          renderItem={({ item, index }) => (
             <TextInput
               style={styles.input}
               placeholder={`Player ${index + 1}`}
-              placeholderTextColor="#aaa"
+              placeholderTextColor="#00FFF0AA"
               value={item}
               onChangeText={text => updatePlayer(text, index)}
             />
           )}
         />
 
-        <View style={{ marginVertical: 20 }}>
-          <NeonButton title="➕ Add Player" onPress={addPlayer} />
+        <View style={styles.buttonGroup}>
+          <NeonButton title="Add Agent" onPress={addPlayer} />
           <View style={{ height: 15 }} />
-          <NeonButton title="🚀 Start Game" onPress={createGame} />
+          <NeonButton title="Deploy Mission" onPress={createGame} />
         </View>
-      </GameContainer>
+      </View>
     </LinearGradient>
   );
 };
@@ -82,26 +124,67 @@ const CreateSessionScreen = () => {
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
   },
-  title: {
-    color: '#00FFFF',
-    fontSize: 28,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 30,
-    textShadowColor: '#00FFFF',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 12,
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 255, 200, 0.03)',
+  },
+  header: {
+    color: '#C7D0D9',
+    fontSize: 42,
+    fontWeight: '700',
+    letterSpacing: 3,
+    marginBottom: 10,
+  },
+  subTitle: {
+    color: '#00FFF0',
+    fontSize: 20,
+    letterSpacing: 2,
+    marginBottom: 10,
+  },
+  centerContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 20,
+  },
+  fingerprintContainer: {
+    width: 180,
+    height: 180,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fingerprint: {
+    width: '100%',
+    height: '100%',
+    tintColor: '#00FFF0',
+    opacity: 0.8,
+  },
+  footerText: {
+    color: '#C7D0D9',
+    marginTop: 15,
+    fontSize: 18,
+    letterSpacing: 2,
+  },
+  formContainer: {
+    width: '100%',
+    marginTop: 30,
   },
   input: {
-    backgroundColor: '#222',
+    backgroundColor: 'rgba(0, 255, 255, 0.05)',
     borderWidth: 1,
-    borderColor: '#00FFFF',
+    borderColor: '#00FFF0',
     borderRadius: 10,
-    color: '#fff',
+    color: '#00FFF0',
     padding: 12,
     marginBottom: 12,
     fontSize: 16,
+    letterSpacing: 1,
+  },
+  buttonGroup: {
+    marginTop: 20,
   },
 });
 

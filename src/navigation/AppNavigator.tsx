@@ -15,11 +15,7 @@ const AppNavigator = () => {
   return (
     <NavigationContainer>
       <Stack.Navigator
-        screenOptions={{
-          headerStyle: { backgroundColor: "#1a1a1a" },
-          headerTintColor: "#fff",
-          headerTitleStyle: { fontWeight: "bold" },
-        }}
+        screenOptions={{ headerShown: false }}
       >
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="CreateSession" component={CreateSessionScreen} />

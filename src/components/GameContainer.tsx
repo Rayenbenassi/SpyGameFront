@@ -7,17 +7,30 @@ type GameContainerProps = {
 };
 
 const GameContainer: React.FC<GameContainerProps> = ({ children }) => (
-  <LinearGradient colors={['#0D0D0D', '#1A0033']} style={styles.gradient}>
+
     <View style={styles.inner}>{children}</View>
-  </LinearGradient>
+
 );
 
 const styles = StyleSheet.create({
-  gradient: { flex: 1 },
-  inner: {
+  gradient: {
     flex: 1,
+    width: '100%',
+    justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+  },
+  inner: {
+    width: '90%',
+    backgroundColor: 'rgba(0, 255, 255, 0.05)',
+    borderColor: '#00FFFF55',
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 30,
+    paddingHorizontal: 20,
+    shadowColor: '#00FFFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
   },
 });
 

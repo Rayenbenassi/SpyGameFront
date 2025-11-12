@@ -1,0 +1,35 @@
+import React from "react";
+import { NavigationContainer } from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import HomeScreen from "../screens/HomeScreen";
+import GameScreen from "../screens/GameScreen";
+import CreateSessionScreen from "../screens/CreateSessionScreen";
+import RevealRoleScreen from "../screens/RevealRoleScreen";
+import { RootStackParamList } from "./types";
+import DiscussionScreen from "../screens/DiscussionScreen";
+import RoundSummaryScreen from "../screens/RoundSummaryScreen";
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
+
+const AppNavigator = () => {
+  return (
+    <NavigationContainer>
+      <Stack.Navigator
+        screenOptions={{
+          headerStyle: { backgroundColor: "#1a1a1a" },
+          headerTintColor: "#fff",
+          headerTitleStyle: { fontWeight: "bold" },
+        }}
+      >
+        <Stack.Screen name="Home" component={HomeScreen} />
+        <Stack.Screen name="CreateSession" component={CreateSessionScreen} />
+        <Stack.Screen name="Game" component={GameScreen} />
+        <Stack.Screen name="RevealRole" component={RevealRoleScreen} />
+        <Stack.Screen name="Discussion" component={DiscussionScreen} />
+        <Stack.Screen name="RoundSummary" component={RoundSummaryScreen}/>
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+};
+
+export default AppNavigator;

@@ -14,8 +14,11 @@ import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import LinearGradient from 'react-native-linear-gradient';
 import { RootStackParamList } from '../navigation/types';
+
 import NeonButton from '../components/NeonButton';
 import GameContainer from '../components/GameContainer';
+
+import { playBackgroundMusic, stopBackgroundMusic } from '../utils/BackgroundMusic';
 
 type GameScreenRouteProp = RouteProp<RootStackParamList, 'Game'>;
 type GameScreenNavProp = StackNavigationProp<RootStackParamList, 'Game'>;
@@ -25,12 +28,13 @@ const GameScreen: React.FC = () => {
   const navigation = useNavigation<GameScreenNavProp>();
   const { session } = route.params;
 
-  const [round, setRound] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
+  const [round, setRound] = useState<any | null>(null);
 
-  // Keep same Animated.Value reference across renders
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
+
+  // Fingerprint animation
   useEffect(() => {
     const animation = Animated.loop(
       Animated.sequence([
@@ -69,6 +73,7 @@ const GameScreen: React.FC = () => {
         players: session.players,
         session,
       });
+
     } catch (error) {
       console.error('Error starting round:', error);
       Alert.alert('Error', 'Could not start the round. Please try again.');
@@ -95,27 +100,26 @@ const GameScreen: React.FC = () => {
       <Text style={styles.signalText}>SIGNAL VERIFIED</Text>
 
       <GameContainer>
-        
-
         <Text style={styles.subtitle}>ACTIVE AGENTS</Text>
-       <FlatList
-  data={session.players}
-  keyExtractor={(p) => p.id.toString()}
-  renderItem={({ item }) => (
-    <View style={styles.playerRow}>
-      <Image
-        source={require('../assets/spyicon.png')}
-        style={styles.spyicon}
-        resizeMode="contain"
-      />
-      <Text style={styles.playerName}>{item.name}</Text>
-    </View>
-  )}
-/>
+
+        <FlatList
+          data={session.players}
+          keyExtractor={(p) => p.id.toString()}
+          renderItem={({ item }) => (
+            <View style={styles.playerRow}>
+              <Image
+                source={require('../assets/spyicon.png')}
+                style={styles.spyicon}
+                resizeMode="contain"
+              />
+              <Text style={styles.playerName}>{item.name}</Text>
+            </View>
+          )}
+        />
 
         <View style={{ marginTop: 30 }}>
           <NeonButton
-            title={loading ? 'Deploying...' : ' Initiate Round'}
+            title={loading ? 'Deploying...' : 'Initiate Round'}
             onPress={startRound}
           />
           {loading && <ActivityIndicator size="large" color="#00FFFF" style={{ marginTop: 15 }} />}
@@ -127,13 +131,13 @@ const GameScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-    spyicon: {
+  spyicon: {
     width: 24,
     height: 24,
     tintColor: '#00FFF0',
     opacity: 0.8,
   },
-    playerRow: {
+  playerRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -179,12 +183,6 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     marginBottom: 10,
   },
-  sessionInfo: {
-    color: '#C7D0D9',
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 10,
-  },
   subtitle: {
     color: '#00FFFF',
     fontSize: 20,
@@ -197,34 +195,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 4,
-  },
-  roundContainer: {
-    marginTop: 40,
-    backgroundColor: 'rgba(0, 255, 255, 0.05)',
-    borderColor: '#00FFFF',
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 20,
-    width: '100%',
-  },
-  roundText: {
-    color: '#00FFFF',
-    fontSize: 22,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  questionText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    marginTop: 10,
-    textAlign: 'center',
-  },
-  spyText: {
-    color: '#FF4D4D',
-    fontSize: 18,
-    marginTop: 10,
-    textAlign: 'center',
-    fontWeight: 'bold',
   },
 });
 

@@ -1,11 +1,18 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, ScrollView, Alert } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  ScrollView,
+  Alert,
+  Animated,
+} from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import LinearGradient from 'react-native-linear-gradient';
 import { RootStackParamList } from '../navigation/types';
 import NeonButton from '../components/NeonButton';
-import GameContainer from '../components/GameContainer';
 
 type SummaryRouteProp = RouteProp<RootStackParamList, 'RoundSummary'>;
 type SummaryNavProp = StackNavigationProp<RootStackParamList, 'RoundSummary'>;
@@ -17,17 +24,45 @@ const RoundSummaryScreen = () => {
 
   const [votes, setVotes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 700,
+      useNativeDriver: true,
+    }).start();
+  }, []);
 
   useEffect(() => {
     const fetchVotes = async () => {
       try {
-        const res = await fetch(`https://spyback.onrender.com/api/votes/round/${round.id}`);
-        if (!res.ok) throw new Error('Failed to fetch votes');
+        console.log("🔍 Fetching votes for round:", round.id);
+
+        const res = await fetch(
+          `https://spyback.onrender.com/api/votes/round/${round.id}`
+        );
+
+        if (!res.ok) {
+          setError("Server returned error status");
+          throw new Error("Bad response");
+        }
+
         const data = await res.json();
-        setVotes(data);
+        console.log("📥 Votes received:", data);
+
+        if (!Array.isArray(data)) {
+          setError("Backend returned invalid format");
+          console.log("❌ INVALID DATA:", data);
+        } else {
+          setVotes(data);
+        }
       } catch (err) {
-        console.error(err);
-        Alert.alert('Error fetching votes');
+        console.log("❌ Fetch error:", err);
+        setError("Could not load votes");
       } finally {
         setLoading(false);
       }
@@ -42,11 +77,14 @@ const RoundSummaryScreen = () => {
         `https://spyback.onrender.com/api/game/${session.id}/round`,
         { method: 'POST' }
       );
-      if (!response.ok) throw new Error('Failed to start next round');
+
       const data = await response.json();
-      navigation.navigate('RevealRole', { round: data, session, players: session.players });
-    } catch (error) {
-      console.error(error);
+      navigation.navigate('RevealRole', {
+        round: data,
+        session,
+        players: session.players,
+      });
+    } catch {
       Alert.alert('Error starting next round');
     }
   };
@@ -59,32 +97,108 @@ const RoundSummaryScreen = () => {
     );
   }
 
-  const spyCaught = votes.some((v) => v.votedFor.id === round.spy.id);
+  // If an error occured → show message
+  if (error) {
+    return (
+      <LinearGradient
+        colors={['#0a0f13', '#0f1c24', '#112b36']}
+        style={styles.center}
+      >
+        <Text style={{ color: "red", fontSize: 20, marginBottom: 20 }}>
+          ⚠ {error}
+        </Text>
+
+        <NeonButton title="Retry" onPress={() => { setLoading(true); setError(null); }} />
+      </LinearGradient>
+    );
+  }
+
+  // If votes empty → display info
+  if (votes.length === 0) {
+    return (
+      <LinearGradient
+        colors={['#0a0f13', '#0f1c24', '#112b36']}
+        style={styles.center}
+      >
+        <Text style={{ color: "#00FFFF", fontSize: 22 }}>
+          No votes were found for this round.
+        </Text>
+      </LinearGradient>
+    );
+  }
+
+  // --- COUNT VOTES SAFELY ---
+  const voteCount: Record<number, number> = {};
+  votes.forEach((v) => {
+    if (!v.votedFor) return; // protect against null backend data
+    const id = v.votedFor.id;
+    voteCount[id] = (voteCount[id] || 0) + 1;
+  });
+
+  const maxVotes = Math.max(...Object.values(voteCount));
+  const topPlayers = Object.keys(voteCount)
+    .filter((id) => voteCount[Number(id)] === maxVotes)
+    .map(Number);
+
+  const spyCaught =
+    topPlayers.length === 1 && topPlayers[0] === round.spy.id;
 
   return (
-    <LinearGradient colors={['#0f2027', '#203a43', '#2c5364']} style={{ flex: 1 }}>
+    <LinearGradient
+      colors={['#0a0f13', '#0f1c24', '#112b36']}
+      style={{ flex: 1 }}
+    >
       <ScrollView contentContainerStyle={styles.container}>
-        <GameContainer>
-          <Text style={styles.title}>🕵️ Round Summary</Text>
+        <Animated.View style={{ opacity: fadeAnim, width: '100%' }}>
+          <LinearGradient
+            colors={[
+              'rgba(255,255,255,0.10)',
+              'rgba(255,255,255,0.04)',
+              'rgba(255,255,255,0.02)',
+            ]}
+            style={styles.glassWrapper}
+          >
+            <View style={styles.innerContent}>
+              <Text style={styles.title}>🕵️ ROUND SUMMARY</Text>
 
-          <Text style={styles.info}>Question: {round.question.text}</Text>
-          <Text style={styles.spy}>Spy: {round.spy.name}</Text>
+              <Text style={styles.label}>QUESTION</Text>
+              <Text style={styles.info}>{round.question.text}</Text>
 
-          <Text style={[styles.result, { color: spyCaught ? '#00FF99' : '#FF4444' }]}>
-            {spyCaught ? '✅ The Spy was caught!' : '😎 The Spy escaped!'}
-          </Text>
+              <Text style={styles.label}>SPY</Text>
+              <Text style={styles.spy}>{round.spy.name}</Text>
 
-          <Text style={styles.subtitle}>Votes:</Text>
-          {votes.map((v) => (
-            <Text key={v.id} style={styles.voteLine}>
-              🗳️ {v.voter.name} voted for {v.votedFor.name}
-            </Text>
-          ))}
+              <Text
+                style={[
+                  styles.result,
+                  { color: spyCaught ? '#00FF99' : '#FF5757' },
+                ]}
+              >
+                {spyCaught ? '✔️ THE SPY WAS CAUGHT' : '😎 THE SPY ESCAPED'}
+              </Text>
 
-          <View style={{ marginTop: 30 }}>
-            <NeonButton title="🚀 Start Next Round" onPress={startNextRound} />
-          </View>
-        </GameContainer>
+              <Text style={styles.label}>VOTES</Text>
+
+              <View style={styles.voteBox}>
+                {votes.map((v) => (
+                  <Text key={v.id} style={styles.voteLine}>
+                    <Text style={{ color: '#00FFFF' }}>
+                      🗳 {v.voter?.name ?? "Unknown"}
+                    </Text>
+                    <Text style={{ color: '#aaa' }}> → </Text>
+                    {v.votedFor?.name ?? "Unknown"}
+                  </Text>
+                ))}
+              </View>
+
+              <View style={{ marginTop: 40 }}>
+                <NeonButton
+                  title="🚀 START NEXT ROUND"
+                  onPress={startNextRound}
+                />
+              </View>
+            </View>
+          </LinearGradient>
+        </Animated.View>
       </ScrollView>
     </LinearGradient>
   );
@@ -93,50 +207,75 @@ const RoundSummaryScreen = () => {
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
-    padding: 20,
+    padding: 25,
   },
+
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#0d0d0d',
   },
+
+  glassWrapper: {
+    width: '100%',
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    marginBottom: 30,
+  },
+
+  innerContent: {
+    padding: 25,
+  },
+
   title: {
     color: '#00FFFF',
-    fontSize: 26,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    textShadowColor: '#00FFFF',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 10,
-  },
-  info: {
-    color: '#ccc',
-    fontSize: 18,
-    marginBottom: 10,
+    fontSize: 28,
+    fontWeight: '900',
+    marginBottom: 20,
     textAlign: 'center',
+    letterSpacing: 2,
   },
-  spy: {
-    color: '#ff6666',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginVertical: 10,
-  },
-  result: {
-    fontSize: 20,
-    marginVertical: 20,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  subtitle: {
-    color: '#fff',
-    fontSize: 18,
+
+  label: {
+    color: '#8eeeff',
+    fontSize: 14,
     marginTop: 20,
+    fontWeight: '700',
   },
+
+  info: {
+    color: '#e5e5e5',
+    fontSize: 18,
+    marginTop: 4,
+  },
+
+  spy: {
+    color: '#FF5757',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+
+  result: {
+    marginTop: 25,
+    fontSize: 22,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+
+  voteBox: {
+    marginTop: 15,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    padding: 15,
+    borderRadius: 15,
+  },
+
   voteLine: {
-    color: '#aaa',
     fontSize: 16,
-    marginVertical: 3,
+    color: '#fff',
+    marginVertical: 4,
   },
 });
 

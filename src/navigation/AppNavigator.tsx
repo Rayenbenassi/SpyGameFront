@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import HomeScreen from "../screens/HomeScreen";
@@ -9,10 +9,20 @@ import { RootStackParamList } from "./types";
 import DiscussionScreen from "../screens/DiscussionScreen";
 import RoundSummaryScreen from "../screens/RoundSummaryScreen";
 import VoteScreen from "../screens/VoteScreen";
+import { playBackgroundMusic, stopBackgroundMusic } from "../utils/BackgroundMusic";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const AppNavigator = () => {
+  useEffect(() => {
+  console.log("🔊 App mounted → starting background music");
+  playBackgroundMusic();
+
+  return () => {
+    console.log("🔇 App unmounted → stopping music");
+    stopBackgroundMusic();
+  };
+}, []);
   return (
     <NavigationContainer>
       <Stack.Navigator

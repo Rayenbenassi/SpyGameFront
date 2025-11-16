@@ -1,156 +1,138 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Alert } from 'react-native';
-import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import { RootStackParamList } from '../navigation/types';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import NeonButton from '../components/NeonButton';
-import GameContainer from '../components/GameContainer';
+import { RootStackParamList } from '../navigation/types';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RouteProp } from '@react-navigation/native';
 
 type DiscussionRouteProp = RouteProp<RootStackParamList, 'Discussion'>;
-type DiscussionNavProp = StackNavigationProp<RootStackParamList, 'Discussion'>;
+type NavProp = StackNavigationProp<RootStackParamList, 'Discussion'>;
+
+const SPEAK_TIME = 20; // seconds per player
 
 const DiscussionScreen = () => {
+  const navigation = useNavigation<NavProp>();
   const route = useRoute<DiscussionRouteProp>();
-  const navigation = useNavigation<DiscussionNavProp>();
   const { round, session } = route.params;
 
-  const [votes, setVotes] = useState<{ voterId: number; votedForId: number }[]>([]);
-  const [currentVoterIndex, setCurrentVoterIndex] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [timer, setTimer] = useState(SPEAK_TIME);
 
-  const currentVoter = session.players[currentVoterIndex];
+  const players = session.players;
+  const currentPlayer = players[currentIndex];
+  
 
-  const handleVote = async (votedFor: any) => {
-    try {
-      setLoading(true);
-
-      const response = await fetch(`https://spyback.onrender.com/api/votes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          roundId: round.id,
-          voterId: currentVoter.id,
-          votedForId: votedFor.id,
-        }),
-      });
-
-      if (!response.ok) throw new Error('Vote submission failed');
-      await response.json();
-
-      setVotes((prev) => [...prev, { voterId: currentVoter.id, votedForId: votedFor.id }]);
-
-      if (currentVoterIndex < session.players.length - 1) {
-        setCurrentVoterIndex(currentVoterIndex + 1);
-      } else {
-        Alert.alert('All votes submitted!', 'Proceed to summary?', [
-          { text: 'OK', onPress: () => navigation.navigate('RoundSummary', { round, session }) },
-        ]);
-      }
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Error submitting vote');
-    } finally {
-      setLoading(false);
+  // TIMER EFFECT
+  useEffect(() => {
+    if (timer === 0) {
+      goToNextPlayer();
+      return;
     }
-  };
 
-  const finishRound = async () => {
-    try {
-      const response = await fetch(
-        `https://spyback.onrender.com/api/game/round/${round.id}/finish`,
-        { method: 'POST' }
-      );
+    const interval = setInterval(() => {
+      setTimer((t) => t - 1);
+    }, 1000);
 
-      if (!response.ok) throw new Error('Failed to finish round');
+    return () => clearInterval(interval);
+  }, [timer]);
 
-      Alert.alert(
-        `Round Over`,
-        `🕵️ The spy was ${round.spy.name}!`,
-        [{ text: 'OK', onPress: () => navigation.navigate('Game', { session }) }]
-      );
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Error finishing round');
+  const goToNextPlayer = () => {
+    if (currentIndex < players.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+      setTimer(SPEAK_TIME);
     }
   };
 
   return (
     <LinearGradient
-      colors={['#0f2027', '#203a43', '#2c5364']}
+      colors={['#000000', '#0a0f1f', '#001f3f']}
       style={styles.gradient}
     >
-      <GameContainer>
-        <Text style={styles.title}>🕵️ Discussion Time</Text>
-        <Text style={styles.question}>Question: {round.question.text}</Text>
+      <View style={styles.container}>
+        <Text style={styles.title}>🕵️‍♂️ Discussion Phase</Text>
 
-        <Text style={styles.subtitle}>Now Voting: 
-          <Text style={styles.voterName}> {currentVoter.name}</Text>
+        <Text style={styles.question}>
+          QUESTION: {round.question.text}
         </Text>
 
-        {session.players.map((p: any) => {
-          const alreadyVoted = votes.find(
-            (v) => v.voterId === currentVoter.id && v.votedForId === p.id
-          );
-          const disabled = loading || p.id === currentVoter.id;
+        <View style={styles.playerBox}>
+          <Text style={styles.playerLabel}>Speaking Now:</Text>
+          <Text style={styles.playerName}>{currentPlayer.name}</Text>
+        </View>
 
-          return (
-            <View key={p.id} style={{ marginVertical: 6 }}>
-              <NeonButton
-                title={
-                  p.id === currentVoter.id
-                    ? `${p.name} (You)`
-                    : alreadyVoted
-                    ? `🗳️ ${p.name} (Voted)`
-                    : p.name
-                }
-                color={alreadyVoted ? '#FF4444' : '#00FFFF'}
-                disabled={disabled}
-                onPress={() => handleVote(p)}
-              />
-            </View>
-          );
-        })}
+        <Text style={styles.timer}>{timer}s</Text>
 
-        {votes.length === session.players.length && (
-          <View style={{ marginTop: 30 }}>
-            <NeonButton title="✅ Finish Round" onPress={finishRound} />
+        {currentIndex < players.length - 1 && (
+          <NeonButton
+            title="⏭ Skip to Next Player"
+            onPress={goToNextPlayer}
+            color="#00FF88"
+          />
+        )}
+
+        {currentIndex === players.length - 1 && timer === 0 && (
+          <View style={{ marginTop: 20 }}>
+            <NeonButton
+              title="🔐 Start Voting"
+              color="#00FFFF"
+              onPress={() =>
+                navigation.navigate('Vote', { round, session })
+              }
+            />
           </View>
         )}
-      </GameContainer>
+      </View>
     </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
-  gradient: {
+  gradient: { flex: 1 },
+  container: {
     flex: 1,
+    padding: 20,
+    justifyContent: 'center',
   },
   title: {
     color: '#00FFFF',
-    fontSize: 26,
-    fontWeight: 'bold',
+    fontSize: 30,
     textAlign: 'center',
-    marginBottom: 10,
+    fontWeight: 'bold',
     textShadowColor: '#00FFFF',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 10,
+    textShadowRadius: 15,
+    marginBottom: 10,
   },
   question: {
-    color: '#ccc',
+    color: '#BBBBBB',
     fontSize: 18,
     textAlign: 'center',
+    marginBottom: 30,
+  },
+  playerBox: {
+    alignItems: 'center',
     marginBottom: 20,
   },
-  subtitle: {
-    color: '#fff',
+  playerLabel: {
+    color: '#AAA',
     fontSize: 20,
-    marginVertical: 10,
-    textAlign: 'center',
   },
-  voterName: {
-    color: '#00FFFF',
+  playerName: {
+    color: '#00FF88',
+    fontSize: 28,
     fontWeight: 'bold',
+    textShadowColor: '#00FF88',
+    textShadowRadius: 15,
+  },
+  timer: {
+    fontSize: 72,
+    textAlign: 'center',
+    color: '#FF3D3D',
+    fontWeight: 'bold',
+    marginBottom: 40,
+    textShadowColor: '#FF0000',
+    textShadowRadius: 20,
   },
 });
 

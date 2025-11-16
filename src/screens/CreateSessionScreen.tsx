@@ -28,6 +28,7 @@ const CreateSessionScreen = () => {
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
+  
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
@@ -55,28 +56,32 @@ const CreateSessionScreen = () => {
     setPlayers(updated);
   };
 
-  const createGame = async () => {
-    const trimmed = players.map(p => p.trim()).filter(p => p !== '');
-    if (trimmed.length === 0) {
-      Alert.alert('Please enter at least one player name');
-      return;
-    }
+const createGame = async () => {
+  const trimmed = players.map(p => p.trim()).filter(p => p !== '');
 
-    try {
-      const response = await fetch('https://spyback.onrender.com/api/game/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playerNames: trimmed }),
-      });
+  if (trimmed.length < 2) {
+    Alert.alert('At least 2 agents are required to start the mission.');
+    return;
+  }
 
-      if (!response.ok) throw new Error('Failed to create session');
-      const session = await response.json();
-      navigation.navigate('Game', { session });
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Error creating game session');
-    }
-  };
+  try {
+    const response = await fetch('https://spyback.onrender.com/api/game/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerNames: trimmed }),
+    });
+
+    if (!response.ok) throw new Error('Failed to create session');
+
+    const session = await response.json();
+    navigation.navigate('Game', { session });
+
+  } catch (error) {
+    console.error(error);
+    Alert.alert('Error creating game session');
+  }
+};
+
 
   return (
     <LinearGradient colors={['#000000', '#041016', '#050A0C']} style={styles.gradient}>

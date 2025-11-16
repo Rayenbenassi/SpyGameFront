@@ -8,6 +8,7 @@ import RevealRoleScreen from "../screens/RevealRoleScreen";
 import { RootStackParamList } from "./types";
 import DiscussionScreen from "../screens/DiscussionScreen";
 import RoundSummaryScreen from "../screens/RoundSummaryScreen";
+import VoteScreen from "../screens/VoteScreen";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -23,6 +24,7 @@ const AppNavigator = () => {
         <Stack.Screen name="RevealRole" component={RevealRoleScreen} />
         <Stack.Screen name="Discussion" component={DiscussionScreen} />
         <Stack.Screen name="RoundSummary" component={RoundSummaryScreen}/>
+        <Stack.Screen name="Vote" component={VoteScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

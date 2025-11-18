@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -16,31 +16,137 @@ const RevealRoleScreen: React.FC = () => {
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
-  const [progress] = useState(new Animated.Value(0));
+  
+  // Animation values
+  const progress = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
+  const flashAnim = useRef(new Animated.Value(0)).current;
 
   const currentPlayer = players[currentIndex];
   const isSpy = currentPlayer.name === round.spy.name;
 
+  // Pulse animation for current player
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.05,
+          duration: 1000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, [currentIndex]);
+
+  // Slide in animation for new player
+  useEffect(() => {
+    if (!revealed) {
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 600,
+          easing: Easing.out(Easing.back(1.5)),
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [currentIndex, revealed]);
+
+  // Progress animation and visual effects for reveal
   useEffect(() => {
     if (revealed) {
+      // Flash effect on reveal
+      Animated.sequence([
+        Animated.timing(flashAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(flashAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      // Start progress bar
       Animated.timing(progress, {
         toValue: 1,
         duration: 2500,
         useNativeDriver: false,
+        easing: Easing.out(Easing.ease),
       }).start();
+
+      // Spy-specific glow effect
+      if (isSpy) {
+        Animated.timing(glowAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }).start();
+      }
     } else {
       progress.setValue(0);
+      glowAnim.setValue(0);
     }
   }, [revealed]);
 
-  const handleReveal = () => setRevealed(true);
+  const handleReveal = () => {
+    // Enhanced visual feedback instead of vibration
+    Animated.sequence([
+      Animated.timing(flashAnim, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(flashAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    
+    setRevealed(true);
+  };
 
   const handleNext = () => {
+    // Visual feedback for next action
+    Animated.sequence([
+      Animated.timing(flashAnim, {
+        toValue: 0.5,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(flashAnim, {
+        toValue: 0,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
     setRevealed(false);
+    slideAnim.setValue(50);
+    fadeAnim.setValue(0);
+    
     if (currentIndex < players.length - 1) {
       setTimeout(() => setCurrentIndex(currentIndex + 1), 300);
     } else {
-      navigation.navigate('Discussion', { round, session });
+      setTimeout(() => navigation.navigate('Discussion', { round, session }), 300);
     }
   };
 
@@ -50,57 +156,156 @@ const RevealRoleScreen: React.FC = () => {
   });
 
   return (
-    <LinearGradient colors={['#000000', '#041016', '#0C0F16']} style={styles.container}>
+    <LinearGradient 
+      colors={['#0a0a0a', '#001122', '#002244']} 
+      style={styles.container}
+    >
+      {/* Flash overlay for visual feedback */}
+      <Animated.View 
+        style={[
+          styles.flashOverlay,
+          {
+            opacity: flashAnim,
+            backgroundColor: 'rgba(255, 255, 255, 0.2)'
+          }
+        ]} 
+      />
+
+      {/* Spy danger glow overlay */}
+      <Animated.View 
+        style={[
+          styles.spyGlow,
+          {
+            opacity: glowAnim,
+            backgroundColor: 'rgba(255, 0, 0, 0.1)'
+          }
+        ]} 
+      />
+
       {!revealed ? (
-        <>
-          <Text style={styles.title}>SPY GAME</Text>
-          <Text style={styles.prompt}>Pass the device to:</Text>
-          <Text style={styles.playerName}>{currentPlayer.name}</Text>
-          <NeonButton title="REVEAL MY ROLE" onPress={handleReveal} color="#00FFFF" />
-        </>
+        <Animated.View 
+          style={[
+            styles.passContainer,
+            {
+              opacity: fadeAnim,
+              transform: [
+                { translateY: slideAnim },
+                { scale: pulseAnim }
+              ]
+            }
+          ]}
+        >
+          {/* Header Section */}
+          <View style={styles.header}>
+            <Text style={styles.agencyTitle}>CENTRAL INTELLIGENCE</Text>
+            <Text style={styles.subtitle}>OPERATION: SPYFALL</Text>
+            <View style={styles.separator} />
+          </View>
+
+          {/* Device Handoff Terminal */}
+          <View style={styles.terminal}>
+            <Text style={styles.terminalHeader}> DEVICE HANDOFF PROTOCOL</Text>
+            <Text style={styles.terminalText}>
+              AGENT IDENTIFICATION REQUIRED
+            </Text>
+          </View>
+
+          <Text style={styles.prompt}>PASS DEVICE TO OPERATIVE:</Text>
+          
+          <View style={styles.agentCard}>
+            <Text style={styles.agentBadge}>👤</Text>
+            <Text style={styles.agentName}>{currentPlayer.name}</Text>
+            <Text style={styles.agentStatus}>AWAITING CLEARANCE...</Text>
+          </View>
+
+          <Text style={styles.progressText}>
+            AGENT {currentIndex + 1} OF {players.length}
+          </Text>
+
+          <NeonButton 
+            title="🔓 REVEAL CLASSIFIED ROLE" 
+            onPress={handleReveal} 
+            color="#00FFFF"
+            size="large"
+          />
+        </Animated.View>
       ) : (
         <View style={styles.roleContainer}>
-          <Text style={styles.title}>SPY GAME</Text>
+          {/* Header Section */}
+          <View style={styles.header}>
+            <Text style={styles.agencyTitle}>CENTRAL INTELLIGENCE</Text>
+            <Text style={styles.subtitle}>CLASSIFIED BRIEFING</Text>
+            <View style={styles.separator} />
+          </View>
 
           {isSpy ? (
-            <>
-              <Text style={styles.spyText}>YOU ARE THE SPY</Text>
-              <Text style={styles.subText}>MISSION QUESTION:</Text>
-              <Text style={styles.question}>
-                {round.question.altText || 'What is the secret location?'}
-              </Text>
+            // SPY REVEAL
+            <View style={styles.spyContainer}>
+              <Text style={styles.alertLevel}>🚨 ALERT LEVEL: MAXIMUM</Text>
+              <Text style={styles.spyText}>UNDERCOVER OPERATIVE</Text>
+              <Text style={styles.warningText}>YOUR COVER IS ACTIVE</Text>
 
-              <Text style={styles.decryptLabel}>DECRYPTING FILE...</Text>
-              <View style={styles.progressBar}>
-                <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
+              <View style={styles.missionBrief}>
+                <Text style={styles.briefHeader}>COVERT MISSION:</Text>
+                <Text style={styles.spyQuestion}>
+                  {round.question.altText || 'What is the secret location?'}
+                </Text>
               </View>
-              <Text style={styles.statusText}>ACCESS LEVEL: TOP SECRET</Text>
-              <Text style={styles.statusText}>TRACE RISK: ACTIVE</Text>
-              <Text style={styles.statusText}>ENCRYPTION KEY VERIFIED</Text>
-            </>
-          ) : (
-            <>
-              <Text style={styles.civilianText}>YOU ARE NOT THE SPY</Text>
-              <Text style={styles.subText}>MISSION QUESTION:</Text>
-              <Text style={styles.question}>{round.question.text}</Text>
 
-              <Text style={styles.decryptLabel}>FILE SYNC COMPLETE</Text>
+              <Text style={styles.decryptLabel}>DECRYPTING INTELLIGENCE...</Text>
+              <View style={styles.progressBar}>
+                <Animated.View style={[styles.progressFillRed, { width: progressWidth }]} />
+              </View>
+
+              <View style={styles.statusPanel}>
+                <Text style={styles.statusCritical}>⚠️ ACCESS: TOP SECRET</Text>
+                <Text style={styles.statusCritical}>🚨 TRACE RISK: ACTIVE</Text>
+                <Text style={styles.statusCritical}>🔓 ENCRYPTION: VERIFIED</Text>
+              </View>
+            </View>
+          ) : (
+            // CIVILIAN REVEAL
+            <View style={styles.civilianContainer}>
+              <Text style={styles.clearanceLevel}>✅ CLEARANCE: STANDARD</Text>
+              <Text style={styles.civilianText}>FIELD AGENT</Text>
+              <Text style={styles.safeText}>YOUR IDENTITY IS SECURE</Text>
+
+              <View style={styles.missionBrief}>
+                <Text style={styles.briefHeader}>MISSION BRIEFING:</Text>
+                <Text style={styles.civilianQuestion}>
+                  {round.question.text}
+                </Text>
+              </View>
+
+              <Text style={styles.syncLabel}>SYNCING INTELLIGENCE...</Text>
               <View style={styles.progressBar}>
                 <Animated.View style={[styles.progressFillGreen, { width: progressWidth }]} />
               </View>
-              <Text style={styles.statusTextGreen}>ACCESS LEVEL: CONFIDENTIAL</Text>
-              <Text style={styles.statusTextGreen}>TRACE RISK: LOW</Text>
-              <Text style={styles.statusTextGreen}>ENCRYPTION KEY VERIFIED</Text>
-            </>
+
+              <View style={styles.statusPanel}>
+                <Text style={styles.statusSafe}>✅ ACCESS: CONFIDENTIAL</Text>
+                <Text style={styles.statusSafe}>🛡️ TRACE RISK: LOW</Text>
+                <Text style={styles.statusSafe}>🔒 ENCRYPTION: VERIFIED</Text>
+              </View>
+            </View>
           )}
 
-          <View style={{ marginTop: 40 }}>
+          <View style={styles.nextButton}>
             <NeonButton
-              title={currentIndex < players.length - 1 ? 'CONTINUE' : 'START DISCUSSION'}
+              title={
+                currentIndex < players.length - 1 
+                  ? "🔄 NEXT OPERATIVE" 
+                  : " INITIATE DISCUSSION"
+              }
               onPress={handleNext}
-              color={isSpy ? '#FF0033' : '#00FF99'}
+              color={isSpy ? '#FF4444' : '#00FF88'}
+              size="large"
             />
           </View>
+
+          <Text style={styles.footerText}>
+            {currentIndex + 1} of {players.length} agents processed
+          </Text>
         </View>
       )}
     </LinearGradient>
@@ -112,82 +317,211 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+    padding: 20,
   },
-  title: {
-    color: '#00FFFF',
-    fontSize: 26,
-    letterSpacing: 3,
-    marginBottom: 20,
-    textShadowColor: '#00FFFF88',
-    textShadowRadius: 10,
-    fontWeight: '700',
+  flashOverlay: {
+    ...StyleSheet.absoluteFillObject,
   },
-  prompt: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    marginBottom: 10,
+  spyGlow: {
+    ...StyleSheet.absoluteFillObject,
   },
-  playerName: {
-    color: '#00FFFF',
-    fontSize: 34,
-    fontWeight: 'bold',
-    marginBottom: 40,
-    textShadowColor: '#00FFFFAA',
-    textShadowRadius: 12,
+  passContainer: {
+    alignItems: 'center',
+    width: '100%',
   },
   roleContainer: {
     alignItems: 'center',
     width: '100%',
   },
+  header: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  agencyTitle: {
+    color: '#00FFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+    letterSpacing: 3,
+    textShadowColor: '#00FFFF',
+    textShadowRadius: 10,
+  },
+  subtitle: {
+    color: '#FFD700',
+    fontSize: 12,
+    letterSpacing: 2,
+    marginTop: 5,
+  },
+  separator: {
+    width: '60%',
+    height: 1,
+    backgroundColor: '#00FFFF',
+    marginTop: 10,
+    opacity: 0.5,
+  },
+  terminal: {
+    backgroundColor: 'rgba(0, 20, 40, 0.8)',
+    borderWidth: 1,
+    borderColor: '#00FFFF',
+    borderRadius: 8,
+    padding: 12,
+    marginVertical: 15,
+    width: '90%',
+  },
+  terminalHeader: {
+    color: '#00FF88',
+    fontSize: 11,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  terminalText: {
+    color: '#00FFFF',
+    fontSize: 10,
+    fontFamily: 'monospace',
+  },
+  prompt: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  agentCard: {
+    backgroundColor: 'rgba(0, 255, 255, 0.1)',
+    borderWidth: 2,
+    borderColor: '#00FFFF',
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    width: '80%',
+    marginBottom: 15,
+  },
+  agentBadge: {
+    fontSize: 24,
+    marginBottom: 8,
+  },
+  agentName: {
+    color: '#00FF88',
+    fontSize: 24,
+    fontWeight: 'bold',
+    textShadowColor: '#00FF88',
+    textShadowRadius: 8,
+  },
+  agentStatus: {
+    color: '#00FFFF',
+    fontSize: 12,
+    marginTop: 5,
+    fontStyle: 'italic',
+  },
+  progressText: {
+    color: '#AAA',
+    fontSize: 12,
+    marginBottom: 20,
+    letterSpacing: 1,
+  },
+  spyContainer: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  civilianContainer: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  alertLevel: {
+    color: '#FF4444',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    textShadowColor: '#FF4444',
+    textShadowRadius: 5,
+  },
+  clearanceLevel: {
+    color: '#00FF88',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    textShadowColor: '#00FF88',
+    textShadowRadius: 5,
+  },
   spyText: {
     color: '#FF0033',
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: 'bold',
     letterSpacing: 2,
-    marginBottom: 20,
-    textShadowColor: '#FF003377',
-    textShadowRadius: 12,
+    marginBottom: 8,
+    textShadowColor: '#FF0033',
+    textShadowRadius: 15,
   },
   civilianText: {
     color: '#00FFAA',
-    fontSize: 34,
+    fontSize: 30,
     fontWeight: 'bold',
     letterSpacing: 1,
-    marginBottom: 20,
-    textShadowColor: '#00FFAA77',
+    marginBottom: 8,
+    textShadowColor: '#00FFAA',
     textShadowRadius: 12,
   },
-  subText: {
-    color: '#00FFFF',
+  warningText: {
+    color: '#FF6666',
     fontSize: 16,
-    letterSpacing: 2,
-    marginBottom: 8,
+    marginBottom: 20,
+    fontStyle: 'italic',
   },
-  question: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    marginBottom: 25,
+  safeText: {
+    color: '#88FF88',
+    fontSize: 16,
+    marginBottom: 20,
+    fontStyle: 'italic',
+  },
+  missionBrief: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: '#444',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 20,
+    width: '90%',
+  },
+  briefHeader: {
+    color: '#00FFFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 8,
     textAlign: 'center',
-    paddingHorizontal: 20,
+  },
+  spyQuestion: {
+    color: '#FF8888',
+    fontSize: 18,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  civilianQuestion: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    textAlign: 'center',
+    fontWeight: '500',
   },
   decryptLabel: {
-    color: '#888',
-    fontSize: 14,
+    color: '#FF8888',
+    fontSize: 13,
     marginBottom: 8,
-    letterSpacing: 2,
+    letterSpacing: 1,
+  },
+  syncLabel: {
+    color: '#88FF88',
+    fontSize: 13,
+    marginBottom: 8,
+    letterSpacing: 1,
   },
   progressBar: {
     width: '80%',
-    height: 8,
+    height: 6,
     backgroundColor: '#1A1A1A',
     borderColor: '#333',
     borderWidth: 1,
-    borderRadius: 5,
+    borderRadius: 3,
     overflow: 'hidden',
     marginBottom: 15,
   },
-  progressFill: {
+  progressFillRed: {
     height: '100%',
     backgroundColor: '#FF0033',
   },
@@ -195,14 +529,30 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: '#00FF99',
   },
-  statusText: {
-    color: '#FF4444',
-    fontSize: 14,
-    letterSpacing: 1,
+  statusPanel: {
+    marginBottom: 25,
   },
-  statusTextGreen: {
+  statusCritical: {
+    color: '#FF4444',
+    fontSize: 12,
+    letterSpacing: 1,
+    marginBottom: 5,
+    textAlign: 'center',
+  },
+  statusSafe: {
     color: '#00FFAA',
-    fontSize: 14,
+    fontSize: 12,
+    letterSpacing: 1,
+    marginBottom: 5,
+    textAlign: 'center',
+  },
+  nextButton: {
+    marginTop: 10,
+    marginBottom: 15,
+  },
+  footerText: {
+    color: '#666',
+    fontSize: 11,
     letterSpacing: 1,
   },
 });

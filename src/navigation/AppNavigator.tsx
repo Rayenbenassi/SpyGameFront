@@ -10,6 +10,8 @@ import DiscussionScreen from "../screens/DiscussionScreen";
 import RoundSummaryScreen from "../screens/RoundSummaryScreen";
 import VoteScreen from "../screens/VoteScreen";
 import { playBackgroundMusic, stopBackgroundMusic } from "../utils/BackgroundMusic";
+import GameLobbyScreen from "../screens/GameLobbyScreen";
+import GameCompletedScreen from "../screens/GameCompletedScreen";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -35,6 +37,10 @@ const AppNavigator = () => {
         <Stack.Screen name="Discussion" component={DiscussionScreen} />
         <Stack.Screen name="RoundSummary" component={RoundSummaryScreen}/>
         <Stack.Screen name="Vote" component={VoteScreen} />
+        <Stack.Screen name="GameLobby" component={GameLobbyScreen} />
+        <Stack.Screen name="GameCompleted" component={GameCompletedScreen} />
+
+
       </Stack.Navigator>
     </NavigationContainer>
   );

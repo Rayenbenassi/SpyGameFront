@@ -45,7 +45,7 @@ const RoundSummaryScreen = () => {
         console.log("🔍 Fetching votes for round:", round.id);
 
         const res = await fetch(
-          `https://spyback.onrender.com/api/votes/round/${round.id}`
+          `http://192.168.100.37:8080/api/votes/round/${round.id}`
         );
 
         if (!res.ok) {

@@ -12,6 +12,7 @@ import VoteScreen from "../screens/VoteScreen";
 import { playBackgroundMusic, stopBackgroundMusic } from "../utils/BackgroundMusic";
 import GameLobbyScreen from "../screens/GameLobbyScreen";
 import GameCompletedScreen from "../screens/GameCompletedScreen";
+import EliminationScreen from "../screens/EliminationScreen";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -39,6 +40,8 @@ const AppNavigator = () => {
         <Stack.Screen name="Vote" component={VoteScreen} />
         <Stack.Screen name="GameLobby" component={GameLobbyScreen} />
         <Stack.Screen name="GameCompleted" component={GameCompletedScreen} />
+        <Stack.Screen name="Elimination" component={EliminationScreen} />
+        
 
 
       </Stack.Navigator>

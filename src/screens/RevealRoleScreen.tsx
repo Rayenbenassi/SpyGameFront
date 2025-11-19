@@ -25,8 +25,45 @@ const RevealRoleScreen: React.FC = () => {
   const glowAnim = useRef(new Animated.Value(0)).current;
   const flashAnim = useRef(new Animated.Value(0)).current;
 
+  // Parse spy data for Multi-Spy mode
+  const getSpyIds = (): number[] => {
+    try {
+      if (session.gameMode === 'MULTI_SPY' && round.spyData) {
+        const spyData = JSON.parse(round.spyData);
+        return spyData.spyIds || [];
+      }
+      // For Classic mode or fallback
+      return round.spy?.id ? [round.spy.id] : [];
+    } catch (error) {
+      console.error('Error parsing spy data:', error);
+      return round.spy?.id ? [round.spy.id] : [];
+    }
+  };
+
+  const spyIds = getSpyIds();
   const currentPlayer = players[currentIndex];
-  const isSpy = currentPlayer.name === round.spy.name;
+  const isSpy = spyIds.includes(currentPlayer.id);
+
+  // Get game mode specific text
+  const getGameModeText = () => {
+    if (session.gameMode === 'MULTI_SPY') {
+      return {
+        operativeType: 'COVERT OPERATIVE',
+        operativeCount: `${spyIds.length} OPERATIVES`,
+        teamText: 'TEAM INFILTRATION',
+        spyColor: '#FF4444'
+      };
+    } else {
+      return {
+        operativeType: 'UNDERCOVER OPERATIVE',
+        operativeCount: '1 OPERATIVE',
+        teamText: 'SINGLE INFILTRATOR',
+        spyColor: '#FF3366'
+      };
+    }
+  };
+
+  const modeText = getGameModeText();
 
   // Pulse animation for current player
   useEffect(() => {
@@ -155,6 +192,14 @@ const RevealRoleScreen: React.FC = () => {
     outputRange: ['0%', '100%'],
   });
 
+  // Get spy count text for display
+  const getSpyCountText = () => {
+    if (session.gameMode === 'MULTI_SPY') {
+      return `${spyIds.length} COVERT OPERATIVES`;
+    }
+    return '1 COVERT OPERATIVE';
+  };
+
   return (
     <LinearGradient 
       colors={['#0a0a0a', '#001122', '#002244']} 
@@ -177,7 +222,7 @@ const RevealRoleScreen: React.FC = () => {
           styles.spyGlow,
           {
             opacity: glowAnim,
-            backgroundColor: 'rgba(255, 0, 0, 0.1)'
+            backgroundColor: isSpy ? 'rgba(255, 0, 0, 0.1)' : 'rgba(0, 255, 136, 0.05)'
           }
         ]} 
       />
@@ -198,13 +243,20 @@ const RevealRoleScreen: React.FC = () => {
           {/* Header Section */}
           <View style={styles.header}>
             <Text style={styles.agencyTitle}>CENTRAL INTELLIGENCE</Text>
-            <Text style={styles.subtitle}>OPERATION: SPYFALL</Text>
+            <Text style={styles.subtitle}>OPERATION: {modeText.teamText}</Text>
             <View style={styles.separator} />
+          </View>
+
+          {/* Game Mode Indicator */}
+          <View style={styles.modeIndicator}>
+            <Text style={styles.modeText}>
+              {getSpyCountText()} ACTIVE
+            </Text>
           </View>
 
           {/* Device Handoff Terminal */}
           <View style={styles.terminal}>
-            <Text style={styles.terminalHeader}> DEVICE HANDOFF PROTOCOL</Text>
+            <Text style={styles.terminalHeader}>DEVICE HANDOFF PROTOCOL</Text>
             <Text style={styles.terminalText}>
               AGENT IDENTIFICATION REQUIRED
             </Text>
@@ -242,7 +294,15 @@ const RevealRoleScreen: React.FC = () => {
             // SPY REVEAL
             <View style={styles.spyContainer}>
               <Text style={styles.alertLevel}>🚨 ALERT LEVEL: MAXIMUM</Text>
-              <Text style={styles.spyText}>UNDERCOVER OPERATIVE</Text>
+              <Text style={styles.spyText}>{modeText.operativeType}</Text>
+              
+              {/* Multi-Spy team info */}
+              {session.gameMode === 'MULTI_SPY' && (
+                <Text style={styles.teamInfo}>
+                  TEAM SIZE: {spyIds.length} OPERATIVES
+                </Text>
+              )}
+              
               <Text style={styles.warningText}>YOUR COVER IS ACTIVE</Text>
 
               <View style={styles.missionBrief}>
@@ -250,6 +310,21 @@ const RevealRoleScreen: React.FC = () => {
                 <Text style={styles.spyQuestion}>
                   {round.question.altText || 'What is the secret location?'}
                 </Text>
+                
+                {/* Multi-Spy specific instructions */}
+                {session.gameMode === 'MULTI_SPY' && (
+                  <View style={styles.teamInstructions}>
+                    <Text style={styles.teamInstructionText}>
+                      • Work with your {spyIds.length - 1} fellow operative{spyIds.length > 2 ? 's' : ''}
+                    </Text>
+                    <Text style={styles.teamInstructionText}>
+                      • Eliminate agents through voting
+                    </Text>
+                    <Text style={styles.teamInstructionText}>
+                      • Win by outnumbering remaining agents
+                    </Text>
+                  </View>
+                )}
               </View>
 
               <Text style={styles.decryptLabel}>DECRYPTING INTELLIGENCE...</Text>
@@ -261,6 +336,9 @@ const RevealRoleScreen: React.FC = () => {
                 <Text style={styles.statusCritical}>⚠️ ACCESS: TOP SECRET</Text>
                 <Text style={styles.statusCritical}>🚨 TRACE RISK: ACTIVE</Text>
                 <Text style={styles.statusCritical}>🔓 ENCRYPTION: VERIFIED</Text>
+                {session.gameMode === 'MULTI_SPY' && (
+                  <Text style={styles.statusCritical}>👥 TEAM OPERATION: ACTIVE</Text>
+                )}
               </View>
             </View>
           ) : (
@@ -268,6 +346,14 @@ const RevealRoleScreen: React.FC = () => {
             <View style={styles.civilianContainer}>
               <Text style={styles.clearanceLevel}>✅ CLEARANCE: STANDARD</Text>
               <Text style={styles.civilianText}>FIELD AGENT</Text>
+              
+              {/* Multi-Spy threat info */}
+              {session.gameMode === 'MULTI_SPY' && (
+                <Text style={styles.threatInfo}>
+                  THREAT LEVEL: {spyIds.length} OPERATIVES DETECTED
+                </Text>
+              )}
+              
               <Text style={styles.safeText}>YOUR IDENTITY IS SECURE</Text>
 
               <View style={styles.missionBrief}>
@@ -275,6 +361,21 @@ const RevealRoleScreen: React.FC = () => {
                 <Text style={styles.civilianQuestion}>
                   {round.question.text}
                 </Text>
+                
+                {/* Multi-Spy specific instructions */}
+                {session.gameMode === 'MULTI_SPY' && (
+                  <View style={styles.agentInstructions}>
+                    <Text style={styles.agentInstructionText}>
+                      • Identify and eliminate {spyIds.length} covert operative{spyIds.length > 1 ? 's' : ''}
+                    </Text>
+                    <Text style={styles.agentInstructionText}>
+                      • Vote to eliminate one suspect each round
+                    </Text>
+                    <Text style={styles.agentInstructionText}>
+                      • Win by identifying all operatives
+                    </Text>
+                  </View>
+                )}
               </View>
 
               <Text style={styles.syncLabel}>SYNCING INTELLIGENCE...</Text>
@@ -286,6 +387,9 @@ const RevealRoleScreen: React.FC = () => {
                 <Text style={styles.statusSafe}>✅ ACCESS: CONFIDENTIAL</Text>
                 <Text style={styles.statusSafe}>🛡️ TRACE RISK: LOW</Text>
                 <Text style={styles.statusSafe}>🔒 ENCRYPTION: VERIFIED</Text>
+                {session.gameMode === 'MULTI_SPY' && (
+                  <Text style={styles.statusSafe}>🎯 TARGETS: {spyIds.length} OPERATIVES</Text>
+                )}
               </View>
             </View>
           )}
@@ -298,7 +402,7 @@ const RevealRoleScreen: React.FC = () => {
                   : " INITIATE DISCUSSION"
               }
               onPress={handleNext}
-              color={isSpy ? '#FF4444' : '#00FF88'}
+              color={isSpy ? modeText.spyColor : '#00FF88'}
               size="large"
             />
           </View>
@@ -357,6 +461,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#00FFFF',
     marginTop: 10,
     opacity: 0.5,
+  },
+  modeIndicator: {
+    backgroundColor: 'rgba(255, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: '#FF4444',
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 10,
+  },
+  modeText: {
+    color: '#FF4444',
+    fontSize: 12,
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
   terminal: {
     backgroundColor: 'rgba(0, 20, 40, 0.8)',
@@ -443,7 +561,7 @@ const styles = StyleSheet.create({
   },
   spyText: {
     color: '#FF0033',
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
     letterSpacing: 2,
     marginBottom: 8,
@@ -452,12 +570,24 @@ const styles = StyleSheet.create({
   },
   civilianText: {
     color: '#00FFAA',
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: 'bold',
     letterSpacing: 1,
     marginBottom: 8,
     textShadowColor: '#00FFAA',
     textShadowRadius: 12,
+  },
+  teamInfo: {
+    color: '#FF8888',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 5,
+  },
+  threatInfo: {
+    color: '#FFAA00',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 5,
   },
   warningText: {
     color: '#FF6666',
@@ -492,12 +622,38 @@ const styles = StyleSheet.create({
     fontSize: 18,
     textAlign: 'center',
     fontWeight: '500',
+    marginBottom: 10,
   },
   civilianQuestion: {
     color: '#FFFFFF',
     fontSize: 18,
     textAlign: 'center',
     fontWeight: '500',
+    marginBottom: 10,
+  },
+  teamInstructions: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 68, 68, 0.3)',
+  },
+  agentInstructions: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 255, 136, 0.3)',
+  },
+  teamInstructionText: {
+    color: '#FF8888',
+    fontSize: 12,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  agentInstructionText: {
+    color: '#88FF88',
+    fontSize: 12,
+    marginBottom: 4,
+    textAlign: 'center',
   },
   decryptLabel: {
     color: '#FF8888',

@@ -1,12 +1,16 @@
 // src/services/gameAPI.ts
 
-// Match your SessionConfigDto exactly
+// Match your SessionConfigDto exactly with Multi-Spy support
 export interface SessionConfigDto {
   totalRounds: number;
   categoryId: number;
+  gameMode?: GameMode;
+  spiesCount?: number; // Make sure this exists
 }
 
-// Match your GameSession model
+export type GameMode = 'CLASSIC' | 'MULTI_SPY';
+
+// Match your updated GameSession model with Multi-Spy fields
 export interface GameSession {
   id: number;
   currentRound: number;
@@ -15,24 +19,23 @@ export interface GameSession {
   category: Category;
   players: Player[];
   rounds: Round[];
+  gameMode: GameMode;
+  spiesCount: number;
+  spiesWon?: boolean;
 }
 
-// Match your Category model
-export interface Category {
-  id: number;
-  name: string;
-  logoUrl?: string;
-}
-
-// Match your Player model
+// Match your updated Player model with elimination fields
 export interface Player {
   id: number;
   name: string;
   score: number;
   session?: GameSession;
+  isEliminated: boolean; // ADD THIS - make it required
+  eliminatedInRoundId?: number;
+  isSpy?: boolean;
 }
 
-// Match your Round model
+// Match your updated Round model with spyData
 export interface Round {
   id: number;
   roundNumber: number;
@@ -41,6 +44,14 @@ export interface Round {
   question: Question;
   session?: GameSession;
   votes?: Vote[];
+  spyData?: string; // JSON storing spy IDs for both modes
+}
+
+// Match your Category model
+export interface Category {
+  id: number;
+  name: string;
+  logoUrl?: string;
 }
 
 // Match your Question model
@@ -59,25 +70,26 @@ export interface Vote {
   round: Round;
 }
 
-const API_BASE_URL = 'https://spyback.onrender.com/api/game';
+// Multi-Spy specific interfaces
+export interface EliminationResult {
+  eliminatedPlayer: Player;
+  sessionStatus: GameSession;
+  gameContinues: boolean;
+  message?: string;
+}
+
+const API_BASE_URL = 'http://192.168.100.37:8080/api';
 
 // Test backend connectivity
 export const testBackendConnection = async (): Promise<boolean> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/session`, {
-      method: 'POST',
+    const response = await fetch(`${API_BASE_URL}/questions/random`, {
+      method: 'GET',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        playerNames: ['Test1', 'Test2', 'Test3'],
-        sessionConfigDto: {
-          categoryId: 1,
-          totalRounds: 3
-        }
-      }),
     });
     
     console.log('🔗 Backend connection test - Status:', response.status);
-    return true;
+    return response.ok;
   } catch (error) {
     console.error('🔗 Backend connection failed:', error);
     return false;
@@ -85,7 +97,7 @@ export const testBackendConnection = async (): Promise<boolean> => {
 };
 
 export const gameAPI = {
-  // Create new game session with configuration
+  // Create new game session with configuration including game mode
   createSession: async (playerNames: string[], sessionConfig: SessionConfigDto): Promise<GameSession> => {
     console.log('📡 Sending create session request:', {
       playerNames,
@@ -93,7 +105,7 @@ export const gameAPI = {
     });
 
     try {
-      const response = await fetch(`${API_BASE_URL}/session`, {
+      const response = await fetch(`${API_BASE_URL}/game/session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -123,7 +135,7 @@ export const gameAPI = {
   // Start first round
   startRound: async (sessionId: number): Promise<Round> => {
     console.log('📡 Starting round for session:', sessionId);
-    const response = await fetch(`${API_BASE_URL}/${sessionId}/round`, {
+    const response = await fetch(`${API_BASE_URL}/game/${sessionId}/round`, {
       method: 'POST',
     });
     
@@ -141,7 +153,7 @@ export const gameAPI = {
   // Get session status
   getSessionStatus: async (sessionId: number): Promise<GameSession> => {
     console.log('📡 Getting session status:', sessionId);
-    const response = await fetch(`${API_BASE_URL}/${sessionId}/status`);
+    const response = await fetch(`${API_BASE_URL}/game/${sessionId}/status`);
     
     if (!response.ok) {
       const errorText = await response.text();
@@ -157,7 +169,7 @@ export const gameAPI = {
   // Finish current round
   finishRound: async (roundId: number): Promise<void> => {
     console.log('📡 Finishing round:', roundId);
-    const response = await fetch(`${API_BASE_URL}/round/${roundId}/finish`, {
+    const response = await fetch(`${API_BASE_URL}/game/round/${roundId}/finish`, {
       method: 'POST',
     });
     
@@ -173,7 +185,7 @@ export const gameAPI = {
   // Move to next round
   nextRound: async (sessionId: number, currentRoundId: number): Promise<Round> => {
     console.log('📡 Starting next round:', { sessionId, currentRoundId });
-    const response = await fetch(`${API_BASE_URL}/${sessionId}/next-round/${currentRoundId}`, {
+    const response = await fetch(`${API_BASE_URL}/game/${sessionId}/next-round/${currentRoundId}`, {
       method: 'POST',
     });
     
@@ -191,7 +203,7 @@ export const gameAPI = {
   // End game session
   finishSession: async (sessionId: number): Promise<void> => {
     console.log('📡 Finishing session:', sessionId);
-    const response = await fetch(`${API_BASE_URL}/${sessionId}/end`, {
+    const response = await fetch(`${API_BASE_URL}/game/${sessionId}/end`, {
       method: 'POST',
     });
     
@@ -204,10 +216,59 @@ export const gameAPI = {
     console.log('✅ Session finished successfully');
   },
 
-  // NEW: Get votes for a round
+eliminatePlayer: async (roundId: number, playerId: number): Promise<EliminationResult> => {
+    console.log('📡 Eliminating player:', { roundId, playerId });
+    const response = await fetch(`${API_BASE_URL}/player/round/${roundId}/eliminate/${playerId}`, {  // Changed to /player/round
+        method: 'POST',
+    });
+    
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Failed to eliminate player:', errorText);
+        throw new Error(`Failed to eliminate player: ${response.status} - ${errorText}`);
+    }
+    
+    const data = await response.json();
+    console.log('✅ Player eliminated successfully:', data);
+    return data;
+},
+
+  // NEW: Get active players (non-eliminated)
+  getActivePlayers: async (sessionId: number): Promise<Player[]> => {
+    console.log('📡 Getting active players for session:', sessionId);
+    const response = await fetch(`${API_BASE_URL}/game/${sessionId}/active-players`);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Failed to get active players:', errorText);
+      throw new Error(`Failed to get active players: ${response.status} - ${errorText}`);
+    }
+    
+    const data = await response.json();
+    console.log('✅ Active players retrieved:', data);
+    return data;
+  },
+
+  // NEW: Get eliminated player for a round
+  getEliminatedPlayer: async (roundId: number): Promise<Player> => {
+    console.log('📡 Getting eliminated player for round:', roundId);
+    const response = await fetch(`${API_BASE_URL}/game/round/${roundId}/eliminated-player`);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Failed to get eliminated player:', errorText);
+      throw new Error(`Failed to get eliminated player: ${response.status} - ${errorText}`);
+    }
+    
+    const data = await response.json();
+    console.log('✅ Eliminated player retrieved:', data);
+    return data;
+  },
+
+  // Get votes for a round
   getVotesForRound: async (roundId: number): Promise<Vote[]> => {
     console.log('📡 Getting votes for round:', roundId);
-    const response = await fetch(`${API_BASE_URL.replace('/game', '')}/votes/round/${roundId}`);
+    const response = await fetch(`${API_BASE_URL}/votes/round/${roundId}`);
     
     if (!response.ok) {
       const errorText = await response.text();
@@ -220,10 +281,10 @@ export const gameAPI = {
     return data;
   },
 
-  // NEW: Cast a vote
+  // Cast a vote
   castVote: async (roundId: number, voterId: number, votedForId: number): Promise<Vote> => {
     console.log('📡 Casting vote:', { roundId, voterId, votedForId });
-    const response = await fetch(`${API_BASE_URL.replace('/game', '')}/votes/cast`, {
+    const response = await fetch(`${API_BASE_URL}/votes/cast`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ roundId, voterId, votedForId }),
@@ -240,10 +301,10 @@ export const gameAPI = {
     return data;
   },
 
-  // NEW: Get all categories
+  // Get all categories
   getCategories: async (): Promise<Category[]> => {
     console.log('📡 Getting categories');
-    const response = await fetch(`${API_BASE_URL.replace('/game', '')}/categories`);
+    const response = await fetch(`${API_BASE_URL}/categories`);
     
     if (!response.ok) {
       const errorText = await response.text();
@@ -256,32 +317,30 @@ export const gameAPI = {
     return data;
   },
 
-  // NEW: Get player votes for a round
+  // Get player votes for a round
   getPlayerVote: async (roundId: number, playerId: number): Promise<Vote | null> => {
     console.log('📡 Getting player vote:', { roundId, playerId });
-    const response = await fetch(`${API_BASE_URL.replace('/game', '')}/votes/round/${roundId}/player/${playerId}`);
+    const response = await fetch(`${API_BASE_URL}/votes/round/${roundId}/player/${playerId}`);
     
     if (!response.ok) {
+      // If player hasn't voted yet, return null instead of throwing
+      if (response.status === 404) {
+        return null;
+      }
       const errorText = await response.text();
       console.error('❌ Failed to get player vote:', errorText);
       throw new Error(`Failed to get player vote: ${response.status} - ${errorText}`);
     }
     
-    // If player hasn't voted yet, this might return 404 or empty
-    try {
-      const data = await response.json();
-      console.log('✅ Player vote retrieved:', data);
-      return data;
-    } catch (error) {
-      console.log('✅ No vote found for player');
-      return null;
-    }
+    const data = await response.json();
+    console.log('✅ Player vote retrieved:', data);
+    return data;
   },
 
-  // NEW: Check if all players have voted
+  // Check if all players have voted
   haveAllPlayersVoted: async (roundId: number, totalPlayers: number): Promise<boolean> => {
     console.log('📡 Checking if all players voted:', roundId);
-    const response = await fetch(`${API_BASE_URL.replace('/game', '')}/votes/round/${roundId}/count`);
+    const response = await fetch(`${API_BASE_URL}/votes/round/${roundId}/count`);
     
     if (!response.ok) {
       const errorText = await response.text();
@@ -293,4 +352,26 @@ export const gameAPI = {
     console.log('✅ Vote count:', data, 'Total players:', totalPlayers);
     return data >= totalPlayers;
   },
+
+  // NEW: Get random question
+  getRandomQuestion: async (): Promise<Question> => {
+    console.log('📡 Getting random question');
+    const response = await fetch(`${API_BASE_URL}/questions/random`);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Failed to get random question:', errorText);
+      throw new Error(`Failed to get random question: ${response.status} - ${errorText}`);
+    }
+    
+    const data = await response.json();
+    console.log('✅ Random question retrieved:', data);
+    return data;
+  },
+
+  // Export testBackendConnection as part of gameAPI
+  testBackendConnection,
 };
+
+// Export the test function directly (remove this duplicate export)
+// Remove this line: export { testBackendConnection };

@@ -14,7 +14,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import NeonButton from '../components/NeonButton';
-import { gameAPI } from '../services/gameAPI';
+import { gameAPI, GameMode } from '../services/gameAPI';
 
 type GameLobbyScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -66,6 +66,54 @@ const GameLobbyScreen: React.FC = () => {
     }
   };
 
+  // Get game mode display information
+  const getGameModeInfo = () => {
+    const mode = session?.gameMode || 'CLASSIC';
+    const spiesCount = session?.spiesCount || 1;
+    
+    switch (mode) {
+      case 'MULTI_SPY':
+        return {
+          title: 'TEAM INFILTRATION',
+          subtitle: `${spiesCount} COVERT OPERATIVE${spiesCount > 1 ? 'S' : ''}`,
+          color: '#FF4444',
+          bgColor: 'rgba(255, 68, 68, 0.1)'
+        };
+      case 'CLASSIC':
+      default:
+        return {
+          title: 'SINGLE INFILTRATOR',
+          subtitle: '1 COVERT OPERATIVE',
+          color: '#00FFF0',
+          bgColor: 'rgba(0, 255, 255, 0.1)'
+        };
+    }
+  };
+
+  // Get protocol text based on game mode
+  const getProtocolText = () => {
+    const mode = session?.gameMode || 'CLASSIC';
+    const spiesCount = session?.spiesCount || 1;
+    
+    if (mode === 'MULTI_SPY') {
+      return [
+        `• ${spiesCount} AGENT${spiesCount > 1 ? 'S ARE' : ' IS'} DESIGNATED AS COVERT OPERATIVE${spiesCount > 1 ? 'S' : ''}`,
+        '• OPERATIVES WORK TOGETHER TO ELIMINATE FIELD AGENTS',
+        '• EACH ROUND: VOTE TO ELIMINATE ONE SUSPECTED OPERATIVE',
+        '• OPERATIVES WIN IF THEY OUTNUMBER REMAINING AGENTS',
+        '• AGENTS WIN BY IDENTIFYING ALL OPERATIVES'
+      ];
+    } else {
+      return [
+        '• ONE AGENT IS DESIGNATED AS THE COVERT OPERATIVE',
+        '• FIELD AGENTS RECEIVE IDENTICAL INTEL',
+        '• THE OPERATIVE RECEIVES ALTERNATIVE INTEL',
+        '• IDENTIFY THE OPERATIVE THROUGH DEBRIEFING',
+        '• SCORE POINTS BASED ON ACCURATE IDENTIFICATION'
+      ];
+    }
+  };
+
   if (loading) {
     return (
       <LinearGradient colors={['#000000', '#041016', '#050A0C']} style={styles.centerContainer}>
@@ -89,6 +137,9 @@ const GameLobbyScreen: React.FC = () => {
     );
   }
 
+  const modeInfo = getGameModeInfo();
+  const protocolText = getProtocolText();
+
   return (
     <LinearGradient colors={['#000000', '#041016', '#050A0C']} style={styles.gradient}>
       <View style={styles.overlay} />
@@ -96,12 +147,34 @@ const GameLobbyScreen: React.FC = () => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.title}>MISSION BRIEFING</Text>
 
+        {/* Game Mode Banner */}
+        <View style={[styles.modeBanner, { backgroundColor: modeInfo.bgColor, borderColor: modeInfo.color }]}>
+          <Text style={[styles.modeTitle, { color: modeInfo.color }]}>
+            {modeInfo.title}
+          </Text>
+          <Text style={[styles.modeSubtitle, { color: modeInfo.color }]}>
+            {modeInfo.subtitle}
+          </Text>
+        </View>
+
         {/* Mission Intel Card */}
         <View style={styles.intelCard}>
           <Text style={styles.intelTitle}>OPERATION PARAMETERS</Text>
           <View style={styles.intelRow}>
+            <Text style={styles.intelLabel}>MISSION TYPE:</Text>
+            <Text style={[styles.intelValue, { color: modeInfo.color }]}>
+              {session.gameMode === 'MULTI_SPY' ? 'TEAM INFILTRATION' : 'SINGLE INFILTRATOR'}
+            </Text>
+          </View>
+          <View style={styles.intelRow}>
             <Text style={styles.intelLabel}>CATEGORY:</Text>
             <Text style={styles.intelValue}>{session.category?.name || 'CLASSIFIED'}</Text>
+          </View>
+          <View style={styles.intelRow}>
+            <Text style={styles.intelLabel}>OPERATIVES:</Text>
+            <Text style={[styles.intelValue, { color: modeInfo.color }]}>
+              {session.spiesCount || 1}
+            </Text>
           </View>
           <View style={styles.intelRow}>
             <Text style={styles.intelLabel}>PHASES:</Text>
@@ -121,6 +194,9 @@ const GameLobbyScreen: React.FC = () => {
               <Text style={styles.agentName}>👤 {player.name}</Text>
               <Text style={styles.agentStatus}>
                 CLEARANCE: {player.score || 0}
+                {player.isEliminated && (
+                  <Text style={styles.eliminatedText}> • ELIMINATED</Text>
+                )}
               </Text>
             </View>
           ))}
@@ -129,10 +205,27 @@ const GameLobbyScreen: React.FC = () => {
         {/* Mission Protocol */}
         <View style={styles.protocolSection}>
           <Text style={styles.protocolTitle}>MISSION PROTOCOL</Text>
-          <Text style={styles.protocolText}>• ONE AGENT WILL BE DESIGNATED AS THE MOLE</Text>
-          <Text style={styles.protocolText}>• FIELD AGENTS RECEIVE IDENTICAL INTEL</Text>
-          <Text style={styles.protocolText}>• THE MOLE RECEIVES ALTERNATIVE INTEL</Text>
-          <Text style={styles.protocolText}>• IDENTIFY THE MOLE THROUGH DEBRIEFING</Text>
+          {protocolText.map((text, index) => (
+            <Text key={index} style={styles.protocolText}>
+              {text}
+            </Text>
+          ))}
+          
+          {/* Additional Multi-Spy specific info */}
+          {session.gameMode === 'MULTI_SPY' && (
+            <View style={styles.multiSpyInfo}>
+              <Text style={styles.multiSpyTitle}>ELIMINATION PROTOCOL</Text>
+              <Text style={styles.multiSpyText}>
+                • Each round concludes with one agent elimination
+              </Text>
+              <Text style={styles.multiSpyText}>
+                • Game ends when operatives outnumber agents or all operatives are identified
+              </Text>
+              <Text style={styles.multiSpyText}>
+                • Final scoring includes elimination bonuses
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Launch Button */}
@@ -172,7 +265,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 3,
     textAlign: 'center',
-    marginBottom: 30,
+    marginBottom: 20,
   },
   loadingText: {
     color: '#00FFFF',
@@ -202,6 +295,27 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textShadowColor: '#FF4444',
     textShadowRadius: 8,
+  },
+  // Game Mode Banner
+  modeBanner: {
+    borderWidth: 2,
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  modeTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 5,
+    textShadowColor: 'currentColor',
+    textShadowRadius: 8,
+  },
+  modeSubtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+    opacity: 0.9,
   },
   intelCard: {
     backgroundColor: 'rgba(0, 255, 255, 0.05)',
@@ -261,6 +375,10 @@ const styles = StyleSheet.create({
     color: '#C7D0D9',
     fontSize: 14,
   },
+  eliminatedText: {
+    color: '#FF4444',
+    fontWeight: 'bold',
+  },
   protocolSection: {
     backgroundColor: 'rgba(0, 255, 255, 0.05)',
     borderWidth: 1,
@@ -281,6 +399,25 @@ const styles = StyleSheet.create({
     color: '#C7D0D9',
     fontSize: 14,
     marginBottom: 8,
+    letterSpacing: 0.5,
+  },
+  // Multi-Spy specific styles
+  multiSpyInfo: {
+    marginTop: 15,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 68, 68, 0.3)',
+  },
+  multiSpyTitle: {
+    color: '#FF4444',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  multiSpyText: {
+    color: '#FF8888',
+    fontSize: 12,
+    marginBottom: 6,
     letterSpacing: 0.5,
   },
   launchSection: {

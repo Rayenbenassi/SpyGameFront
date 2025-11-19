@@ -1,5 +1,5 @@
 // src/screens/GameCompletedScreen.tsx
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import LinearGradient from 'react-native-linear-gradient';
 import { RootStackParamList } from '../navigation/types';
 import NeonButton from '../components/NeonButton';
-import { Player, GameSession } from '../services/gameAPI';
+import { Player, GameSession, gameAPI } from '../services/gameAPI'; // Import gameAPI
 
 type GameCompletedRouteProp = RouteProp<RootStackParamList, 'GameCompleted'>;
 type GameCompletedNavProp = StackNavigationProp<RootStackParamList, 'GameCompleted'>;
@@ -24,7 +24,10 @@ interface SessionWithPlayers extends GameSession {
 const GameCompletedScreen: React.FC = () => {
   const route = useRoute<GameCompletedRouteProp>();
   const navigation = useNavigation<GameCompletedNavProp>();
-  const { session } = route.params as { session: SessionWithPlayers };
+  const { session: initialSession } = route.params as { session: SessionWithPlayers };
+
+  const [session, setSession] = useState<SessionWithPlayers>(initialSession);
+  const [refreshing, setRefreshing] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
@@ -42,24 +45,64 @@ const GameCompletedScreen: React.FC = () => {
         useNativeDriver: true,
       }),
     ]).start();
+
+    // Refresh session data to ensure we have the latest scores
+    refreshSessionData();
   }, []);
 
-  // Calculate winner(s)
-  const calculateWinners = (): Player[] => {
-    if (!session.players || session.players.length === 0) return [];
+  const refreshSessionData = async () => {
+    try {
+      setRefreshing(true);
+      console.log('🔄 Refreshing session data for ID:', session.id);
+      
+      const updatedSession = await gameAPI.getSessionStatus(session.id);
+      console.log('✅ Refreshed session data:', updatedSession);
+      console.log('📊 Player scores after refresh:');
+      updatedSession.players?.forEach((player: Player) => {
+        console.log(`   ${player.name}: ${player.score} | Eliminated: ${player.isEliminated}`);
+      });
+      
+      setSession(updatedSession as SessionWithPlayers);
+    } catch (error) {
+      console.error('❌ Failed to refresh session data:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
+  // Calculate winner(s) - FIXED: Use the current session state
+  const calculateWinners = (): Player[] => {
+    if (!session.players || session.players.length === 0) {
+      console.log('⚠️ No players found in session');
+      return [];
+    }
+
+    console.log('🎯 Calculating winners from players:', session.players);
+    
     const maxScore = Math.max(...session.players.map((p: Player) => p.score));
-    return session.players.filter((player: Player) => player.score === maxScore);
+    console.log('📈 Max score found:', maxScore);
+    
+    const winners = session.players.filter((player: Player) => player.score === maxScore);
+    console.log('🏆 Winners:', winners.map(w => `${w.name} (${w.score})`));
+    
+    return winners;
   };
 
   const winners = calculateWinners();
   const isTie = winners.length > 1;
 
+  console.log('🎊 Final game state:', {
+    totalPlayers: session.players?.length,
+    winnersCount: winners.length,
+    isTie,
+    allScores: session.players?.map(p => `${p.name}: ${p.score}`)
+  });
+
   const startNewGame = () => {
     navigation.navigate('CreateSession');
   };
 
-  // Sort players by score for the leaderboard
+  // Sort players by score for the leaderboard - FIXED: Use current session state
   const sortedPlayers = session.players?.sort((a: Player, b: Player) => b.score - a.score) || [];
 
   return (
@@ -81,6 +124,25 @@ const GameCompletedScreen: React.FC = () => {
           <View style={styles.header}>
             <Text style={styles.title}>MISSION COMPLETE</Text>
             <Text style={styles.subtitle}>OPERATION SUCCESSFUL</Text>
+            
+            {/* Refresh Button */}
+            <NeonButton
+              title={refreshing ? "🔄 REFRESHING..." : "🔄 REFRESH SCORES"}
+              onPress={refreshSessionData}
+              color="#FFD700"
+              size="small"
+              disabled={refreshing}
+            />
+          </View>
+
+          {/* Debug Info - Remove in production */}
+          <View style={styles.debugInfo}>
+            <Text style={styles.debugText}>
+              Session ID: {session.id} | Players: {session.players?.length} | Rounds: {session.currentRound}/{session.numberOfRounds}
+            </Text>
+            <Text style={styles.debugText}>
+              Game Mode: {session.gameMode} | Spies Count: {session.spiesCount}
+            </Text>
           </View>
 
           {/* Winners Section */}
@@ -89,13 +151,17 @@ const GameCompletedScreen: React.FC = () => {
               {isTie ? '🏆 TOP AGENTS 🏆' : '🏆 WINNING AGENT 🏆'}
             </Text>
             
-            {winners.map((winner: Player) => (
-              <View key={winner.id} style={styles.winnerItem}>
-                <Text style={styles.winnerName}>{winner.name}</Text>
-                <Text style={styles.winnerScore}>Score: {winner.score}</Text>
-                {!isTie && <Text style={styles.championText}>👑 CHAMPION</Text>}
-              </View>
-            ))}
+            {winners.length > 0 ? (
+              winners.map((winner: Player) => (
+                <View key={winner.id} style={styles.winnerItem}>
+                  <Text style={styles.winnerName}>{winner.name}</Text>
+                  <Text style={styles.winnerScore}>Score: {winner.score}</Text>
+                  {!isTie && <Text style={styles.championText}>👑 CHAMPION</Text>}
+                </View>
+              ))
+            ) : (
+              <Text style={styles.noWinnersText}>No winners calculated</Text>
+            )}
 
             {isTie && (
               <Text style={styles.tieText}>TIE GAME! IMPRESSIVE TEAMWORK</Text>
@@ -105,19 +171,37 @@ const GameCompletedScreen: React.FC = () => {
           {/* Final Scores */}
           <View style={styles.scoresCard}>
             <Text style={styles.scoresTitle}>FINAL SCORES</Text>
-            {sortedPlayers.map((player: Player, index: number) => (
-              <View 
-                key={player.id} 
-                style={[
-                  styles.scoreItem,
-                  winners.some(w => w.id === player.id) && styles.winnerScoreItem
-                ]}
-              >
-                <Text style={styles.rank}>#{index + 1}</Text>
-                <Text style={styles.playerName}>{player.name}</Text>
-                <Text style={styles.playerScore}>{player.score} pts</Text>
-              </View>
-            ))}
+            {sortedPlayers.length > 0 ? (
+              sortedPlayers.map((player: Player, index: number) => (
+                <View 
+                  key={player.id} 
+                  style={[
+                    styles.scoreItem,
+                    winners.some(w => w.id === player.id) && styles.winnerScoreItem,
+                    player.isEliminated && styles.eliminatedPlayerItem
+                  ]}
+                >
+                  <Text style={styles.rank}>#{index + 1}</Text>
+                  <View style={styles.playerInfo}>
+                    <Text style={styles.playerName}>
+                      {player.name} 
+                      {player.isEliminated && ' 💀'}
+                    </Text>
+                    <Text style={styles.playerStatus}>
+                      {player.isEliminated ? 'ELIMINATED' : 'ACTIVE'}
+                    </Text>
+                  </View>
+                  <Text style={[
+                    styles.playerScore,
+                    winners.some(w => w.id === player.id) && styles.winnerScoreText
+                  ]}>
+                    {player.score} pts
+                  </Text>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.noPlayersText}>No players found</Text>
+            )}
           </View>
 
           {/* Game Statistics */}
@@ -125,11 +209,15 @@ const GameCompletedScreen: React.FC = () => {
             <Text style={styles.statsTitle}>MISSION STATS</Text>
             <View style={styles.statsRow}>
               <Text style={styles.stat}>Total Rounds: {session.numberOfRounds}</Text>
-              <Text style={styles.stat}>Category: {session.category?.name}</Text>
+              <Text style={styles.stat}>Completed: {session.currentRound}</Text>
             </View>
             <View style={styles.statsRow}>
-              <Text style={styles.stat}>Players: {session.players?.length}</Text>
-              <Text style={styles.stat}>Completed: {new Date().toLocaleDateString()}</Text>
+              <Text style={styles.stat}>Players: {session.players?.length || 0}</Text>
+              <Text style={styles.stat}>Active: {session.players?.filter(p => !p.isEliminated).length || 0}</Text>
+            </View>
+            <View style={styles.statsRow}>
+              <Text style={styles.stat}>Game Mode: {session.gameMode}</Text>
+              <Text style={styles.stat}>Date: {new Date().toLocaleDateString()}</Text>
             </View>
           </View>
 
@@ -149,9 +237,11 @@ const GameCompletedScreen: React.FC = () => {
 
           {/* Celebration Message */}
           <Text style={styles.celebrationText}>
-            {isTie 
-              ? "Outstanding performance from all top agents! 🎉"
-              : "Exceptional work, agent! Mission accomplished! 🎊"
+            {winners.length === 0 
+              ? "Game completed! 🎉"
+              : isTie 
+                ? "Outstanding performance from all top agents! 🎉"
+                : "Exceptional work, agent! Mission accomplished! 🎊"
             }
           </Text>
         </Animated.View>
@@ -190,6 +280,20 @@ const styles = StyleSheet.create({
     fontSize: 18,
     letterSpacing: 2,
     textAlign: 'center',
+    marginBottom: 15,
+  },
+  debugInfo: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 15,
+    width: '100%',
+  },
+  debugText: {
+    color: '#888',
+    fontSize: 10,
+    textAlign: 'center',
+    fontFamily: 'monospace',
   },
   winnersCard: {
     backgroundColor: 'rgba(255, 215, 0, 0.1)',
@@ -235,6 +339,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 10,
   },
+  noWinnersText: {
+    color: '#FF6666',
+    fontSize: 16,
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
   scoresCard: {
     backgroundColor: 'rgba(0, 255, 255, 0.1)',
     borderWidth: 1,
@@ -264,21 +374,43 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 10,
   },
+  eliminatedPlayerItem: {
+    backgroundColor: 'rgba(255, 0, 0, 0.1)',
+    opacity: 0.7,
+  },
   rank: {
     color: '#00FFFF',
     fontSize: 16,
     fontWeight: 'bold',
     width: 30,
   },
+  playerInfo: {
+    flex: 1,
+    marginLeft: 10,
+  },
   playerName: {
     color: '#FFFFFF',
     fontSize: 16,
-    flex: 1,
+    fontWeight: 'bold',
+  },
+  playerStatus: {
+    color: '#888',
+    fontSize: 12,
+    fontStyle: 'italic',
   },
   playerScore: {
     color: '#00FF99',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  winnerScoreText: {
+    color: '#FFD700',
+  },
+  noPlayersText: {
+    color: '#FF6666',
+    fontSize: 16,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
   statsCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',

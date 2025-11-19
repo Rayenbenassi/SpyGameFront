@@ -19,7 +19,7 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import NeonButton from '../components/NeonButton';
-import { gameAPI, testBackendConnection } from '../services/gameAPI';
+import { gameAPI } from '../services/gameAPI'; // FIXED: Remove separate testBackendConnection import
 
 const { width, height } = Dimensions.get('window');
 
@@ -28,11 +28,16 @@ type CreateSessionScreenNavigationProp = StackNavigationProp<
   'CreateSession'
 >;
 
+// Game mode types
+type GameMode = 'CLASSIC' | 'MULTI_SPY';
+
 const CreateSessionScreen: React.FC = () => {
   const navigation = useNavigation<CreateSessionScreenNavigationProp>();
   const [players, setPlayers] = useState<string[]>(['']);
   const [selectedCategory, setSelectedCategory] = useState<string>('Locations');
   const [totalRounds, setTotalRounds] = useState<number>(3);
+  const [gameMode, setGameMode] = useState<GameMode>('CLASSIC');
+  const [spiesCount, setSpiesCount] = useState<number>(1);
   const [backendConnected, setBackendConnected] = useState<boolean | null>(null);
   const [showAlert, setShowAlert] = useState(false);
   const [alertConfig, setAlertConfig] = useState({
@@ -45,6 +50,25 @@ const CreateSessionScreen: React.FC = () => {
   const alertScaleAnim = useRef(new Animated.Value(0.8)).current;
   const alertOpacityAnim = useRef(new Animated.Value(0)).current;
   const scanLineAnim = useRef(new Animated.Value(0)).current;
+
+  // Calculate recommended spies count based on player count
+  const calculateRecommendedSpies = (playerCount: number): number => {
+    if (playerCount <= 4) return 1;
+    if (playerCount <= 6) return 2;
+    if (playerCount <= 8) return 3;
+    return 4;
+  };
+
+  // Update spies count when players change or game mode changes
+  useEffect(() => {
+    const activePlayers = players.filter(p => p.trim() !== '').length;
+    if (activePlayers >= 3 && gameMode === 'MULTI_SPY') {
+      const recommended = calculateRecommendedSpies(activePlayers);
+      setSpiesCount(recommended);
+    } else if (gameMode === 'CLASSIC') {
+      setSpiesCount(1);
+    }
+  }, [players.length, gameMode]);
 
   useEffect(() => {
     Animated.loop(
@@ -86,17 +110,18 @@ const CreateSessionScreen: React.FC = () => {
     }
   }, [showAlert]);
 
-  // Test backend connection on component mount
+  // Test backend connection on component mount - FIXED
   useEffect(() => {
     const testConnection = async () => {
       console.log('🔗 Testing backend connection...');
-      const isConnected = await testBackendConnection();
+      const isConnected = await gameAPI.testBackendConnection(); // FIXED: Use gameAPI.testBackendConnection
       console.log('🔗 Backend connection status:', isConnected);
       setBackendConnected(isConnected);
     };
     testConnection();
   }, []);
 
+  // ... rest of your component code remains exactly the same ...
   const showMissionAlert = (title: string, message: string, type: 'warning' | 'error' | 'success' = 'warning') => {
     setAlertConfig({ title, message, type });
     setShowAlert(true);
@@ -162,14 +187,37 @@ const CreateSessionScreen: React.FC = () => {
 
   const createGame = async () => {
     const trimmed = players.map(p => p.trim()).filter(p => p !== '');
+    const activePlayersCount = trimmed.length;
 
-    if (trimmed.length < 3) {
+    if (activePlayersCount < 3) {
       showMissionAlert(
         '🚨 MISSION REQUIREMENTS',
         'MINIMUM 3 AGENTS REQUIRED FOR COVERT OPERATIONS\n\n• Field Operations: 3+ Agents\n• Intelligence Gathering: Active\n• Mission Security: Compromised',
         'warning'
       );
       return;
+    }
+
+    // Validate spies count for multi-spy mode
+    if (gameMode === 'MULTI_SPY') {
+      const maxPossibleSpies = Math.max(1, Math.floor(activePlayersCount / 2));
+      if (spiesCount >= activePlayersCount) {
+        showMissionAlert(
+          '🕵️ SPY COUNT ERROR',
+          `TOO MANY SPIES CONFIGURED\n\n• Available Agents: ${activePlayersCount}\n• Configured Spies: ${spiesCount}\n• Maximum Allowed: ${maxPossibleSpies}\n\nAdjust spy count to continue.`,
+          'error'
+        );
+        return;
+      }
+
+      if (spiesCount < 1) {
+        showMissionAlert(
+          '🕵️ SPY COUNT ERROR',
+          'AT LEAST 1 SPY REQUIRED\n\n• Covert Operations: Requires infiltration\n• Mission parameters: Invalid\n• Adjust spy count to continue.',
+          'error'
+        );
+        return;
+      }
     }
 
     // Check for duplicate agent names
@@ -197,6 +245,8 @@ const CreateSessionScreen: React.FC = () => {
       const sessionConfig = {
         categoryId: getCategoryId(selectedCategory),
         totalRounds: totalRounds,
+        gameMode: gameMode,
+        spiesCount: gameMode === 'MULTI_SPY' ? spiesCount : 1,
       };
 
       console.log('🔍 Final request data:', {
@@ -219,6 +269,21 @@ const CreateSessionScreen: React.FC = () => {
 
   const categories: string[] = ['Locations', 'Dates', 'Movies', 'Food'];
   const roundOptions: number[] = [1, 2, 3, 4, 5];
+  
+  // Spy count options for multi-spy mode
+  const getSpyOptions = (): number[] => {
+    const activePlayers = players.filter(p => p.trim() !== '').length;
+    if (activePlayers < 3) return [1];
+    
+    const maxSpies = Math.max(1, Math.floor(activePlayers / 2));
+    const options = [];
+    for (let i = 1; i <= maxSpies; i++) {
+      options.push(i);
+    }
+    return options;
+  };
+
+  const spyOptions = getSpyOptions();
 
   const getAlertColors = () => {
     switch (alertConfig.type) {
@@ -320,6 +385,78 @@ const CreateSessionScreen: React.FC = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>MISSION PARAMETERS</Text>
           
+          {/* Game Mode Selection */}
+          <Text style={styles.parameterLabel}>OPERATION MODE</Text>
+          <View style={styles.optionsRow}>
+            <TouchableOpacity
+              onPress={() => setGameMode('CLASSIC')}
+              style={[
+                styles.modeButton,
+                gameMode === 'CLASSIC' && styles.modeButtonSelected
+              ]}
+            >
+              <Text style={[
+                styles.modeButtonText,
+                gameMode === 'CLASSIC' && styles.modeButtonTextSelected
+              ]}>
+                CLASSIC
+              </Text>
+              <Text style={styles.modeButtonSubtext}>
+                Single Spy
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              onPress={() => setGameMode('MULTI_SPY')}
+              style={[
+                styles.modeButton,
+                gameMode === 'MULTI_SPY' && styles.modeButtonSelected
+              ]}
+            >
+              <Text style={[
+                styles.modeButtonText,
+                gameMode === 'MULTI_SPY' && styles.modeButtonTextSelected
+              ]}>
+                MULTI-SPY
+              </Text>
+              <Text style={styles.modeButtonSubtext}>
+                Team Infiltration
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Spy Count Selection (only for Multi-Spy mode) */}
+          {gameMode === 'MULTI_SPY' && (
+            <>
+              <Text style={styles.parameterLabel}>COVERT OPERATIVES</Text>
+              <View style={styles.optionsRow}>
+                {spyOptions.map(count => (
+                  <TouchableOpacity
+                    key={count}
+                    onPress={() => setSpiesCount(count)}
+                    style={[
+                      styles.spyButton,
+                      spiesCount === count && styles.spyButtonSelected
+                    ]}
+                  >
+                    <Text style={[
+                      styles.spyButtonText,
+                      spiesCount === count && styles.spyButtonTextSelected
+                    ]}>
+                      {count}
+                    </Text>
+                    <Text style={styles.spyButtonSubtext}>
+                      SPY{count > 1 ? 'IES' : ''}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={styles.recommendationText}>
+                Recommended: {calculateRecommendedSpies(players.filter(p => p.trim() !== '').length)} spies for {players.filter(p => p.trim() !== '').length} agents
+              </Text>
+            </>
+          )}
+
           {/* Category Selection */}
           <Text style={styles.parameterLabel}>INTEL CATEGORY</Text>
           <View style={styles.optionsRow}>
@@ -363,6 +500,19 @@ const CreateSessionScreen: React.FC = () => {
               </TouchableOpacity>
             ))}
           </View>
+        </View>
+
+        {/* Mode Description */}
+        <View style={styles.modeInfoContainer}>
+          <Text style={styles.modeInfoTitle}>
+            {gameMode === 'CLASSIC' ? 'CLASSIC MODE' : 'MULTI-SPY MODE'}
+          </Text>
+          <Text style={styles.modeInfoText}>
+            {gameMode === 'CLASSIC' 
+              ? '• 1 Spy among agents\n• Identify the spy each round\n• Score points per round'
+              : `• ${spiesCount} Spies working together\n• Eliminate agents round by round\n• Final scoring with bonuses`
+            }
+          </Text>
         </View>
 
         {/* Deploy Mission Button */}
@@ -477,6 +627,7 @@ const CreateSessionScreen: React.FC = () => {
   );
 };
 
+// ... your styles remain exactly the same ...
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
@@ -508,6 +659,7 @@ const styles = StyleSheet.create({
   connectionText: {
     fontSize: 14,
     fontWeight: 'bold',
+    color: '#FFFFFF',
   },
   header: {
     color: '#C7D0D9',
@@ -641,6 +793,100 @@ const styles = StyleSheet.create({
   },
   deploySection: {
     marginTop: 20,
+  },
+  // New styles for game mode selection
+  modeButton: {
+    flex: 1,
+    marginHorizontal: 4,
+    paddingVertical: 15,
+    borderWidth: 2,
+    borderColor: '#00FFF0',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 255, 255, 0.05)',
+  },
+  modeButtonSelected: {
+    backgroundColor: '#00FFF0',
+  },
+  modeButtonText: {
+    fontSize: 14,
+    color: '#00FFF0',
+    fontWeight: 'bold',
+    textShadowColor: '#00FFF0',
+    textShadowRadius: 8,
+  },
+  modeButtonTextSelected: {
+    color: '#000000',
+    fontWeight: 'bold',
+  },
+  modeButtonSubtext: {
+    fontSize: 10,
+    color: '#00FFF0',
+    marginTop: 4,
+    opacity: 0.8,
+  },
+  // Spy button styles
+  spyButton: {
+    flex: 1,
+    marginHorizontal: 4,
+    paddingVertical: 12,
+    borderWidth: 2,
+    borderColor: '#FF4444',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 68, 68, 0.05)',
+  },
+  spyButtonSelected: {
+    backgroundColor: '#FF4444',
+  },
+  spyButtonText: {
+    fontSize: 16,
+    color: '#FF4444',
+    fontWeight: 'bold',
+    textShadowColor: '#FF4444',
+    textShadowRadius: 8,
+  },
+  spyButtonTextSelected: {
+    color: '#000000',
+    fontWeight: 'bold',
+  },
+  spyButtonSubtext: {
+    fontSize: 9,
+    color: '#FF4444',
+    marginTop: 2,
+    opacity: 0.8,
+  },
+  // Recommendation text
+  recommendationText: {
+    color: '#FFAA00',
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  // Mode info container
+  modeInfoContainer: {
+    backgroundColor: 'rgba(0, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: '#00FFF0',
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 20,
+  },
+  modeInfoTitle: {
+    color: '#00FFF0',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modeInfoText: {
+    color: '#C7D0D9',
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
   },
   // Alert Styles
   alertOverlay: {

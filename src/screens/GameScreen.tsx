@@ -60,7 +60,7 @@ const GameScreen: React.FC = () => {
     setLoading(true);
     try {
       const response = await fetch(
-        `https://spyback.onrender.com/api/game/${session.id}/round`,
+        `http://192.168.100.37:8080/api/game/${session.id}/round`,
         { method: 'POST' }
       );
 
